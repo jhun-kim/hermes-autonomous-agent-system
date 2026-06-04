@@ -129,4 +129,4 @@ PYTHONPATH=src python3 -m hasystem.commands.finalize \
   --dry-run
 ```
 
-After installing the package, the equivalent console scripts are `hermes-discord-request`, `hermes-intake`, `hermes-run-loop`, and `hermes-finalize`.
+After installing the package, the equivalent console scripts are `hermes-discord-request`, `hermes-intake`, `hermes-run-loop`, `hermes-run-once`, and `hermes-finalize`.
