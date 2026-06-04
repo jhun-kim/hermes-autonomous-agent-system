@@ -8,7 +8,7 @@ Current scope:
 2. Clone or update repos under `/Users/chai/Documents/GitHub` by default.
 3. Ensure automation labels: `ai:ready`, `executor:lazycodex`, `priority:p2`, `ai:in-progress`, `ai:blocked`, `ai:done`.
 4. Create `ai:ready` issues from Discord/Hermes task text.
-5. Accept a raw Discord/Gateway message or JSON payload and orchestrate intake + run-loop with one command.
+5. Accept a raw Discord/Gateway message, JSON payload, or natural-language request with repo aliases/default repo context and orchestrate intake + run-loop with one command.
 6. Select eligible `ai:ready` issues, store the active loop in SQLite, and prepare a `codex .` worker command in the target repo.
 7. Finalize by planning or running branch push, PR creation, issue comment, and label transition.
 
@@ -38,6 +38,34 @@ Free-form Discord message text also works:
 ```bash
 PYTHONPATH=src python3 -m hasystem.commands.discord_request \
   --message '/agent https://github.com/owner/repo.git Implement the requested feature and verify tests'
+```
+
+Natural-language messages can use aliases so Discord feels like talking to a friend instead of filling out a form:
+
+```bash
+PYTHONPATH=src python3 -m hasystem.commands.discord_request \
+  --repo-alias hermes-autonomous-agent-system=jhun-kim/hermes-autonomous-agent-system \
+  --message 'Hermes, hermes-autonomous-agent-system 다음 단계 개발해줘. 자연어 Discord router를 더 좋게 만들어줘.' \
+  --dry-run
+```
+
+If a Discord channel/thread is dedicated to one repo, configure a default and omit the repo entirely:
+
+```bash
+PYTHONPATH=src python3 -m hasystem.commands.discord_request \
+  --channel-default-repo 1512060115757432833=jhun-kim/hermes-autonomous-agent-system \
+  --thread-id 1512060115757432833 \
+  --message 'Hermes, 이 레포에 자동 finalize 붙여줘' \
+  --dry-run
+```
+
+A global fallback repo is also supported for single-repo workspaces:
+
+```bash
+PYTHONPATH=src python3 -m hasystem.commands.discord_request \
+  --default-repo jhun-kim/hermes-autonomous-agent-system \
+  --message 'Hermes, 다음 단계 진행해줘' \
+  --dry-run
 ```
 
 Dry-run the Discord parser/plan without GitHub, workspace, state, or worker mutations:

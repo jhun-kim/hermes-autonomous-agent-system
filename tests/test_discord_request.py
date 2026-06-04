@@ -6,7 +6,12 @@ from pathlib import Path
 import pytest
 
 from hasystem.command_runner import CommandResult, RecordingCommandRunner
-from hasystem.discord_request import DiscordAutomationService, DiscordRequestParseError, parse_discord_request
+from hasystem.discord_request import (
+    DiscordAutomationService,
+    DiscordRequestParseError,
+    DiscordRequestRouterConfig,
+    parse_discord_request,
+)
 from hasystem.github_client import DEFAULT_AI_LABELS, GitHubClient
 from hasystem.intake import IntakeService
 from hasystem.loop_runner import RunLoopService
@@ -29,6 +34,45 @@ def test_parse_discord_request_from_freeform_command() -> None:
 
     assert request.repo_raw == "https://github.com/owner/repo.git"
     assert request.request_text == "add Discord automation"
+
+
+def test_parse_discord_request_resolves_alias_in_natural_language() -> None:
+    config = DiscordRequestRouterConfig(
+        repo_aliases={"hermes-autonomous-agent-system": "jhun-kim/hermes-autonomous-agent-system"}
+    )
+
+    request = parse_discord_request(
+        "Hermes, hermes-autonomous-agent-system 다음 단계 개발해줘", config=config
+    )
+
+    assert request.repo_raw == "jhun-kim/hermes-autonomous-agent-system"
+    assert request.request_text == "다음 단계 개발해줘"
+
+
+def test_parse_discord_request_uses_channel_default_for_friend_like_message() -> None:
+    config = DiscordRequestRouterConfig(
+        channel_default_repos={"1512060115757432833": "jhun-kim/hermes-autonomous-agent-system"}
+    )
+
+    request = parse_discord_request(
+        "Hermes, 이 레포에 자동 finalize 붙여줘",
+        config=config,
+        thread_id="1512060115757432833",
+    )
+
+    assert request.repo_raw == "jhun-kim/hermes-autonomous-agent-system"
+    assert request.request_text == "이 레포에 자동 finalize 붙여줘"
+
+
+def test_parse_discord_request_resolves_repo_field_alias() -> None:
+    config = DiscordRequestRouterConfig(
+        repo_aliases={"hasystem": "jhun-kim/hermes-autonomous-agent-system"}
+    )
+
+    request = parse_discord_request("repo: hasystem\nrequest: 자연어 라우터 추가", config=config)
+
+    assert request.repo_raw == "jhun-kim/hermes-autonomous-agent-system"
+    assert request.request_text == "자연어 라우터 추가"
 
 
 def test_parse_discord_request_requires_repo_and_task() -> None:
@@ -96,9 +140,10 @@ def test_discord_automation_dry_run_only_parses_message(tmp_path: Path) -> None:
             worker=CodexWorkerLauncher(runner=runner),
             github_factory=lambda repo: GitHubClient(repo=repo, runner=runner),
         ),
+        router_config=DiscordRequestRouterConfig(default_repo="owner/repo"),
     )
 
-    result = service.handle("repo: owner/repo\nrequest: Ship it", dry_run=True)
+    result = service.handle("Hermes, Ship it", dry_run=True)
 
     assert result.dry_run is True
     assert result.request.repo_raw == "owner/repo"
