@@ -108,7 +108,7 @@ PYTHONPATH=src python3 -m hasystem.commands.run_loop \
   --dry-run
 ```
 
-The worker prompt is piped to `codex .` from the target checkout and instructs the worker to use the OmO/OmX workflow, run tests, and prepare a branch/PR.
+The worker prompt is piped to `codex .` from the target checkout and instructs the worker to use the OmO/OmX workflow, specifically use the ulw skill/workflow, run tests, and prepare a branch/PR.
 
 Finalize after the worker completes:
 

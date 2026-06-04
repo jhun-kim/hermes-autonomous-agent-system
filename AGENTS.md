@@ -19,3 +19,7 @@ Exceptions:
 - Pure inspection/status checks may read files or GitHub state without creating an issue.
 - Emergency cleanup of accidental local artifacts may be done before issue creation.
 - If GitHub issue creation is unavailable, stop and report the blocker instead of silently editing code.
+
+## OmO/OmX worker workflow
+
+When launching or instructing Codex/OmX workers for repository coding tasks, require the worker to use the OmO/OmX workflow and specifically the ulw skill/workflow.
