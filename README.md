@@ -8,8 +8,9 @@ Current scope:
 2. Clone or update repos under `/Users/chai/Documents/GitHub` by default.
 3. Ensure automation labels: `ai:ready`, `executor:lazycodex`, `priority:p2`, `ai:in-progress`, `ai:blocked`, `ai:done`.
 4. Create `ai:ready` issues from Discord/Hermes task text.
-5. Select eligible `ai:ready` issues, store the active loop in SQLite, and prepare a `codex .` worker command in the target repo.
-6. Finalize by planning or running branch push, PR creation, issue comment, and label transition.
+5. Accept a raw Discord/Gateway message or JSON payload and orchestrate intake + run-loop with one command.
+6. Select eligible `ai:ready` issues, store the active loop in SQLite, and prepare a `codex .` worker command in the target repo.
+7. Finalize by planning or running branch push, PR creation, issue comment, and label transition.
 
 External commands go through a subprocess runner abstraction so tests can fake `git`, `gh`, and `codex`.
 
@@ -24,7 +25,31 @@ PYTHONPATH=src python3 -m hasystem.commands.run_loop --repo owner/name --dry-run
 
 Hermes can call the CLIs directly from a Discord command handler.
 
-Create a task from a Discord request:
+One-shot Discord/Gateway handler: parse a raw message, clone/update the repo, create the issue, select the ready issue, persist loop state, mark it in progress, and open a Codex worker Terminal session:
+
+```bash
+PYTHONPATH=src python3 -m hasystem.commands.discord_request \
+  --message '{"repo":"owner/repo","request":"Implement the requested feature and verify tests"}' \
+  --state-db state.db
+```
+
+Free-form Discord message text also works:
+
+```bash
+PYTHONPATH=src python3 -m hasystem.commands.discord_request \
+  --message '/agent https://github.com/owner/repo.git Implement the requested feature and verify tests'
+```
+
+Dry-run the Discord parser/plan without GitHub, workspace, state, or worker mutations:
+
+```bash
+PYTHONPATH=src python3 -m hasystem.commands.discord_request \
+  --message 'repo: owner/repo
+request: Implement the requested feature and verify tests' \
+  --dry-run
+```
+
+Create a task from a Discord request without launching the worker loop:
 
 ```bash
 PYTHONPATH=src python3 -m hasystem.commands.intake \
@@ -70,4 +95,4 @@ PYTHONPATH=src python3 -m hasystem.commands.finalize \
   --dry-run
 ```
 
-After installing the package, the equivalent console scripts are `hermes-intake`, `hermes-run-loop`, and `hermes-finalize`.
+After installing the package, the equivalent console scripts are `hermes-discord-request`, `hermes-intake`, `hermes-run-loop`, and `hermes-finalize`.

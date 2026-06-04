@@ -6,6 +6,7 @@ requires-python = ">=3.10"
 dependencies = []
 
 [project.scripts]
+hermes-discord-request = "hasystem.commands.discord_request:main"
 hermes-intake = "hasystem.commands.intake:main"
 hermes-run-loop = "hasystem.commands.run_loop:main"
 hermes-finalize = "hasystem.commands.finalize:main"
