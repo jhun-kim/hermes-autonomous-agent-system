@@ -27,9 +27,9 @@ def main() -> int:
     service = RunLoopService(
         workspace=Workspace(Path(args.workspace), runner),
         store=StateStore(Path(args.state_db)),
-        worker=CodexWorkerLauncher(runner=runner),
+        worker=CodexWorkerLauncher(runner=runner, executor=args.executor),
     )
-    result = service.run_once(repo_raw=args.repo, dry_run=True)
+    result = service.run_once(repo_raw=args.repo, dry_run=True, executor=args.executor)
     if result is None:
         print("No eligible ai:ready issue found.")
         return 0
@@ -40,7 +40,7 @@ def main() -> int:
         print(f"Selected issue #{result.loop.issue.number}: {result.loop.issue.title}")
         print(f"Created loop id: {result.loop.loop_id}")
     print(f"Would create branch: {result.loop.branch}")
-    print(f"Executor: {args.executor}")
+    print(f"Executor: {result.loop.executor}")
     print(f"Worker cwd: {result.worker_command.cwd}")
     print(f"Worker command: {' '.join(result.worker_command.args)}")
     print(f"State DB: {Path(args.state_db).resolve()}")

@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .command_runner import CommandSpec
 from .github_client import GitHubClient
 from .models import LoopState
 from .repo_spec import RepoSpec
 from .state_store import StateStore
-from .worker import CodexWorkerLauncher
+from .worker import CodexWorkerLauncher, WorkerExecutor
 from .workspace import Workspace
 
 
@@ -26,11 +26,17 @@ class RunLoopService:
     worker: CodexWorkerLauncher
     github_factory: Callable[[str], GitHubClient] = GitHubClient
 
-    def run_once(self, repo_raw: str, dry_run: bool) -> RunLoopResult | None:
+    def run_once(self, repo_raw: str, dry_run: bool, executor: WorkerExecutor = "lazycodex") -> RunLoopResult | None:
         repo = RepoSpec.parse(repo_raw)
         active = self.store.get_active_loop(repo.full_name)
         if active is not None:
-            command = self.worker.build(repo_path=repo.local_path(self.workspace.base_path), repo=repo.full_name, issue=active.issue, branch=active.branch)
+            active_worker = replace(self.worker, executor=active.executor)
+            command = active_worker.build(
+                repo_path=repo.local_path(self.workspace.base_path),
+                repo=repo.full_name,
+                issue=active.issue,
+                branch=active.branch,
+            )
             return RunLoopResult(loop=active, worker_command=command, existing_active=True)
 
         client = self.github_factory(repo.full_name)
@@ -38,9 +44,10 @@ class RunLoopService:
         if issue is None:
             return None
 
-        loop = LoopState.start(repo=repo.full_name, issue=issue, executor="lazycodex")
+        loop = LoopState.start(repo=repo.full_name, issue=issue, executor=executor)
         local_path = repo.local_path(self.workspace.base_path) if dry_run else self.workspace.ensure_repo(repo)
-        command = self.worker.build(repo_path=local_path, repo=repo.full_name, issue=issue, branch=loop.branch)
+        selected_worker = replace(self.worker, executor=executor)
+        command = selected_worker.build(repo_path=local_path, repo=repo.full_name, issue=issue, branch=loop.branch)
         if not dry_run:
             self.store.save_loop(loop)
             client.mark_in_progress(issue.number)
