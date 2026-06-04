@@ -5,6 +5,11 @@ description = "Hermes-controlled autonomous GitHub/Discord agent system MVP"
 requires-python = ">=3.10"
 dependencies = []
 
+[project.scripts]
+hermes-intake = "hasystem.commands.intake:main"
+hermes-run-loop = "hasystem.commands.run_loop:main"
+hermes-finalize = "hasystem.commands.finalize:main"
+
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 

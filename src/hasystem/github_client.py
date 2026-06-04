@@ -1,11 +1,28 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from dataclasses import dataclass
+from typing import Final
 
+from .command_runner import SubprocessCommandRunner
 from .models import GitHubIssue
 
+
+@dataclass(frozen=True)
+class GitHubLabel:
+    name: str
+    color: str
+    description: str
+
+
+DEFAULT_AI_LABELS: Final = (
+    GitHubLabel("ai:ready", "0e8a16", "Ready for autonomous AI execution"),
+    GitHubLabel("executor:lazycodex", "5319e7", "Use LazyCodex/Codex executor"),
+    GitHubLabel("priority:p2", "fbca04", "Default automation priority"),
+    GitHubLabel("ai:in-progress", "1d76db", "AI worker is processing this issue"),
+    GitHubLabel("ai:blocked", "d93f0b", "AI worker is blocked"),
+    GitHubLabel("ai:done", "0e8a16", "AI worker completed the task"),
+)
 
 _PRIORITY_RANK = {
     "priority:p0": 0,
@@ -17,9 +34,35 @@ _PRIORITY_RANK = {
 @dataclass(frozen=True)
 class GitHubClient:
     repo: str
+    runner: SubprocessCommandRunner = SubprocessCommandRunner()
+
+    def ensure_ai_labels(self) -> None:
+        for label in DEFAULT_AI_LABELS:
+            self.runner.run(
+                [
+                    "gh",
+                    "label",
+                    "create",
+                    label.name,
+                    "--repo",
+                    self.repo,
+                    "--color",
+                    label.color,
+                    "--description",
+                    label.description,
+                    "--force",
+                ]
+            )
+
+    def create_issue(self, title: str, body: str, labels: tuple[str, ...]) -> int:
+        args = ["gh", "issue", "create", "--repo", self.repo, "--title", title, "--body", body]
+        for label in labels:
+            args.extend(["--label", label])
+        result = self.runner.run(args)
+        return _parse_issue_number(result.stdout)
 
     def list_ready_issues(self) -> list[GitHubIssue]:
-        result = subprocess.run(
+        result = self.runner.run(
             [
                 "gh",
                 "issue",
@@ -32,12 +75,64 @@ class GitHubClient:
                 "open",
                 "--json",
                 "number,title,body,labels",
-            ],
-            check=True,
-            text=True,
-            capture_output=True,
+            ]
         )
         return self.parse_issue_list(result.stdout)
+
+    def mark_in_progress(self, issue_number: int) -> None:
+        self.runner.run(
+            [
+                "gh",
+                "issue",
+                "edit",
+                str(issue_number),
+                "--repo",
+                self.repo,
+                "--add-label",
+                "ai:in-progress",
+                "--remove-label",
+                "ai:ready",
+            ]
+        )
+
+    def create_pr(self, branch: str, issue: GitHubIssue) -> str:
+        result = self.runner.run(
+            [
+                "gh",
+                "pr",
+                "create",
+                "--repo",
+                self.repo,
+                "--base",
+                "main",
+                "--head",
+                branch,
+                "--title",
+                f"AI: {issue.title}",
+                "--body",
+                f"Closes #{issue.number}",
+            ]
+        )
+        return result.stdout.strip()
+
+    def comment_issue(self, issue_number: int, body: str) -> None:
+        self.runner.run(["gh", "issue", "comment", str(issue_number), "--repo", self.repo, "--body", body])
+
+    def mark_done(self, issue_number: int) -> None:
+        self.runner.run(
+            [
+                "gh",
+                "issue",
+                "edit",
+                str(issue_number),
+                "--repo",
+                self.repo,
+                "--add-label",
+                "ai:done",
+                "--remove-label",
+                "ai:in-progress",
+            ]
+        )
 
     @staticmethod
     def parse_issue_list(raw_json: str) -> list[GitHubIssue]:
@@ -72,3 +167,11 @@ def _issue_sort_key(issue: GitHubIssue) -> tuple[int, int]:
     labels = set(issue.labels)
     priority = min((_PRIORITY_RANK[label] for label in labels if label in _PRIORITY_RANK), default=99)
     return priority, issue.number
+
+
+def _parse_issue_number(raw: str) -> int:
+    marker = "/issues/"
+    for line in raw.splitlines():
+        if marker in line:
+            return int(line.rsplit(marker, maxsplit=1)[1].strip().strip("/"))
+    return int(raw.strip().lstrip("#"))
