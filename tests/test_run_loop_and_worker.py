@@ -24,6 +24,8 @@ def test_codex_worker_launcher_builds_target_repo_command(tmp_path: Path) -> Non
     assert "GitHub repo: owner/repo" in command.stdin_text
     assert "Issue #7: Implement parser" in command.stdin_text
     assert "OmO/OmX workflow" in command.stdin_text
+    assert "issue first, code second" in command.stdin_text
+    assert "confirm the selected GitHub issue" in command.stdin_text
 
 
 def test_run_loop_dry_run_selects_issue_and_does_not_mutate_github(tmp_path: Path) -> None:

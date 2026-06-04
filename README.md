@@ -14,6 +14,12 @@ Current scope:
 
 External commands go through a subprocess runner abstraction so tests can fake `git`, `gh`, and `codex`.
 
+## Operating rule: issue first, code second
+
+When continuing this repo to the next stage, register the intended work as a GitHub issue first, then immediately read/confirm that issue before editing code. The confirmed issue number, title, body, and labels become the source of truth for the work bundle. Only after that confirmation should an agent modify code, docs, tests, branches, or PRs.
+
+This rule is also recorded in `AGENTS.md` so future coding agents see it before making changes.
+
 ## Quick start
 
 ```bash
