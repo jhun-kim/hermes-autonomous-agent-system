@@ -1,0 +1,62 @@
+from __future__ import annotations
+
+import re
+import uuid
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+
+
+ACTIVE_PHASES = {"observe", "plan", "execute", "verify", "pr_created", "approval_wait", "paused"}
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def slugify_title(title: str) -> str:
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", title.lower()).strip("-")
+    slug = re.sub(r"-+", "-", slug)
+    return slug[:60] or "task"
+
+
+@dataclass(frozen=True)
+class GitHubIssue:
+    number: int
+    title: str
+    labels: list[str] = field(default_factory=list)
+    body: str = ""
+
+
+@dataclass(frozen=True)
+class ApprovalState:
+    intent: str | None = None
+    status: str | None = None
+    approval_id: str | None = None
+
+
+@dataclass(frozen=True)
+class LoopState:
+    loop_id: str
+    repo: str
+    issue: GitHubIssue
+    branch: str
+    executor: str
+    phase: str
+    approval: ApprovalState = field(default_factory=ApprovalState)
+    created_at: str = field(default_factory=utc_now_iso)
+    updated_at: str = field(default_factory=utc_now_iso)
+
+    @classmethod
+    def start(cls, repo: str, issue: GitHubIssue, executor: str) -> "LoopState":
+        branch = f"ai/issue-{issue.number}-{slugify_title(issue.title)}"
+        return cls(
+            loop_id=str(uuid.uuid4()),
+            repo=repo,
+            issue=issue,
+            branch=branch,
+            executor=executor,
+            phase="plan",
+        )
+
+    def is_active(self) -> bool:
+        return self.phase in ACTIVE_PHASES
