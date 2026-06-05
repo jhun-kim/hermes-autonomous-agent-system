@@ -3,16 +3,19 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from typing import Any, Final
 
 from .intake import IntakeResult, IntakeService
 from .loop_runner import RunLoopResult, RunLoopService
 
-_REPO_PATTERN = re.compile(
+JsonValue = Any
+
+_REPO_PATTERN: Final = re.compile(
     r"(?P<repo>https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:\.git)?|[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)"
 )
-_REPO_FIELD_PATTERN = re.compile(r"^\s*(?:repo|repository)\s*[:=]\s*(?P<repo>\S+)\s*$", re.IGNORECASE)
-_REQUEST_FIELD_PATTERN = re.compile(r"^\s*(?:request|task|prompt)\s*[:=]\s*(?P<request>.*)$", re.IGNORECASE)
-_COMMAND_PREFIX_PATTERN = re.compile(r"^\s*(?:/agent|!agent|@hermes|hermes)\b\s*", re.IGNORECASE)
+_REPO_FIELD_PATTERN: Final = re.compile(r"^\s*(?:repo|repository)\s*[:=]\s*(?P<repo>\S+)\s*$", re.IGNORECASE)
+_REQUEST_FIELD_PATTERN: Final = re.compile(r"^\s*(?:request|task|prompt)\s*[:=]\s*(?P<request>.*)$", re.IGNORECASE)
+_COMMAND_PREFIX_PATTERN: Final = re.compile(r"^\s*(?:/agent|!agent|@hermes|hermes)\b\s*", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -23,18 +26,12 @@ class DiscordRequest:
 
 @dataclass(frozen=True)
 class DiscordRequestRouterConfig:
-    """Options that let Discord messages feel like natural chat.
-
-    `repo_aliases` maps human-friendly names to GitHub repos. Example:
-    `{"hermes-autonomous-agent-system": "jhun-kim/hermes-autonomous-agent-system"}`.
-
-    `channel_default_repos` maps Discord channel/thread IDs to the repo that
-    should be assumed when the message does not mention a repo.
-    """
+    """Options that let Discord messages feel like natural chat."""
 
     repo_aliases: dict[str, str] = field(default_factory=dict)
     default_repo: str | None = None
     channel_default_repos: dict[str, str] = field(default_factory=dict)
+    allow_repos: frozenset[str] = frozenset()
 
     def default_for_context(self, *, channel_id: str | None = None, thread_id: str | None = None) -> str | None:
         if thread_id and thread_id in self.channel_default_repos:
@@ -46,6 +43,12 @@ class DiscordRequestRouterConfig:
     def resolve_alias(self, repo_or_alias: str) -> str:
         key = repo_or_alias.strip()
         return self.repo_aliases.get(key) or self.repo_aliases.get(key.lower()) or key
+
+    def ensure_allowed(self, repo_raw: str) -> str:
+        repo = self.resolve_alias(repo_raw)
+        if self.allow_repos and repo not in self.allow_repos:
+            raise DiscordRequestParseError(f"Repo {repo} is not allowed by router config")
+        return repo
 
 
 @dataclass(frozen=True)
@@ -92,17 +95,7 @@ def parse_discord_request(
     channel_id: str | None = None,
     thread_id: str | None = None,
 ) -> DiscordRequest:
-    """Parse a Discord/Gateway task message into repo + request text.
-
-    Supported shapes:
-    - JSON: {"repo": "owner/repo", "request": "..."}
-    - Multiline: repo: owner/repo\nrequest: ...
-    - Free text: /agent owner/repo implement the feature
-    - GitHub URL instead of owner/repo.
-    - Natural chat using aliases/defaults:
-      "Hermes, hermes-autonomous-agent-system 계속 개발해줘"
-      "이 레포에 자동 finalize 붙여줘" with a channel default repo.
-    """
+    """Parse a Discord/Gateway task message into repo + request text."""
     config = config or DiscordRequestRouterConfig()
     raw_message = raw_message.strip()
     if not raw_message:
@@ -117,7 +110,7 @@ def parse_discord_request(
     for line in raw_message.splitlines():
         repo_field = _REPO_FIELD_PATTERN.match(line)
         if repo_field:
-            repo_from_field = config.resolve_alias(repo_field.group("repo"))
+            repo_from_field = config.ensure_allowed(repo_field.group("repo"))
             continue
         request_field = _REQUEST_FIELD_PATTERN.match(line)
         if request_field:
@@ -133,11 +126,11 @@ def parse_discord_request(
         repo_raw = repo_from_field
         request_text = text_without_repo_field
     elif repo_match:
-        repo_raw = config.resolve_alias(repo_match.group("repo"))
+        repo_raw = config.ensure_allowed(repo_match.group("repo"))
         request_text = (text_without_repo_field[: repo_match.start()] + text_without_repo_field[repo_match.end() :]).strip()
     elif alias_match:
-        alias, owner_repo, start, end = alias_match
-        repo_raw = owner_repo
+        _alias, owner_repo, start, end = alias_match
+        repo_raw = config.ensure_allowed(owner_repo)
         request_text = (text_without_repo_field[:start] + text_without_repo_field[end:]).strip()
     else:
         repo_raw = config.default_for_context(channel_id=channel_id, thread_id=thread_id)
@@ -148,6 +141,7 @@ def parse_discord_request(
             "Could not find a GitHub repo. Mention owner/repo, a GitHub URL, a configured alias, or set a default repo for this channel."
         )
 
+    repo_raw = config.ensure_allowed(repo_raw)
     request_text = _strip_command_prefix(request_text).strip(" ,:：-—\n\t")
     if not request_text:
         raise DiscordRequestParseError("Could not find task text after the repo/alias/default context.")
@@ -161,13 +155,22 @@ def _parse_json_request(raw_message: str, *, config: DiscordRequestRouterConfig)
         return None
     if not isinstance(data, dict):
         raise DiscordRequestParseError("JSON Discord request must be an object")
-    repo = data.get("repo") or data.get("repository")
-    request = data.get("request") or data.get("task") or data.get("prompt") or data.get("content") or data.get("text")
-    if not isinstance(repo, str) or not repo.strip():
+    repo = _optional_str(data.get("repo")) or _optional_str(data.get("repository")) or _optional_str(data.get("repo_hint"))
+    request = (
+        _optional_str(data.get("request"))
+        or _optional_str(data.get("task"))
+        or _optional_str(data.get("prompt"))
+        or _optional_str(data.get("content"))
+        or _optional_str(data.get("text"))
+    )
+    if not repo:
         raise DiscordRequestParseError("JSON Discord request needs a repo field")
-    if not isinstance(request, str) or not request.strip():
+    if not request:
         raise DiscordRequestParseError("JSON Discord request needs request/task/prompt/content text")
-    return DiscordRequest(repo_raw=config.resolve_alias(repo.strip()), request_text=request.strip())
+    request_text = _strip_command_prefix(request).strip(" ,:：-—\n\t")
+    if not request_text:
+        raise DiscordRequestParseError("Could not find task text after the repo/alias/default context.")
+    return DiscordRequest(repo_raw=config.ensure_allowed(repo.strip()), request_text=request_text)
 
 
 def _find_alias_match(text: str, aliases: dict[str, str]) -> tuple[str, str, int, int] | None:
@@ -188,5 +191,28 @@ def _strip_command_prefix(text: str) -> str:
     return _COMMAND_PREFIX_PATTERN.sub("", text)
 
 
+def _optional_str(value: JsonValue | None) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
 class DiscordRequestParseError(ValueError):
     pass
+
+
+def __getattr__(name: str) -> Any:
+    """Keep gateway symbols available from this legacy module path."""
+    if name == "DiscordGatewayEvent":
+        from .gateway import DiscordGatewayEvent
+
+        return DiscordGatewayEvent
+    if name == "build_gateway_response":
+        from .gateway import build_gateway_response
+
+        return build_gateway_response
+    if name == "load_router_config":
+        from .gateway import load_router_config
+
+        return load_router_config
+    raise AttributeError(name)

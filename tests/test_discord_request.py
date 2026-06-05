@@ -12,6 +12,7 @@ from hasystem.discord_request import (
     DiscordRequestRouterConfig,
     parse_discord_request,
 )
+from hasystem.gateway import DiscordGatewayEvent, build_gateway_response, load_router_config
 from hasystem.github_client import DEFAULT_AI_LABELS, GitHubClient
 from hasystem.intake import IntakeService
 from hasystem.loop_runner import RunLoopService
@@ -27,6 +28,57 @@ def test_parse_discord_request_from_json_payload() -> None:
 
     assert request.repo_raw == "owner/repo"
     assert request.request_text == "Fix auth and run tests"
+
+
+def test_parse_gateway_event_envelope_from_json_payload() -> None:
+    payload = json.dumps(
+        {
+            "platform": "discord",
+            "guild_id": "guild-1",
+            "channel_id": "channel-1",
+            "thread_id": "thread-1",
+            "sender": {"id": "user-1", "display_name": "Chai"},
+            "message": {"content": "Hermes, ship gateway routing"},
+            "repo": "hasystem",
+            "dry_run": True,
+            "no_run_loop": True,
+        }
+    )
+
+    event = DiscordGatewayEvent.from_json(payload)
+
+    assert event.platform == "discord"
+    assert event.guild_id == "guild-1"
+    assert event.channel_id == "channel-1"
+    assert event.thread_id == "thread-1"
+    assert event.sender_id == "user-1"
+    assert event.sender_display_name == "Chai"
+    assert event.raw_message == "Hermes, ship gateway routing"
+    assert event.repo_hint == "hasystem"
+    assert event.dry_run is True
+    assert event.no_run_loop is True
+
+
+def test_gateway_event_repo_hint_strips_hermes_prefix_in_structured_response(tmp_path: Path) -> None:
+    runner = RecordingCommandRunner([])
+    workspace = Workspace(tmp_path / "workspace", runner)
+    service = DiscordAutomationService(
+        intake=IntakeService(workspace=workspace, runner=runner),
+        loop_runner=RunLoopService(
+            workspace=workspace,
+            store=StateStore(tmp_path / "state.db"),
+            worker=CodexWorkerLauncher(runner=runner),
+            github_factory=lambda repo: GitHubClient(repo=repo, runner=runner),
+        ),
+        router_config=DiscordRequestRouterConfig(repo_aliases={"hasystem": "owner/repo"}),
+    )
+    event = DiscordGatewayEvent.from_json(
+        json.dumps({"content": "Hermes, ship gateway routing", "repo": "hasystem", "dry_run": True})
+    )
+
+    payload = build_gateway_response(service=service, event=event, dry_run_override=None, no_run_loop_override=None)
+
+    assert payload["parsed_request"]["request_text"] == "ship gateway routing"
 
 
 def test_parse_discord_request_from_freeform_command() -> None:
@@ -62,6 +114,61 @@ def test_parse_discord_request_uses_channel_default_for_friend_like_message() ->
 
     assert request.repo_raw == "jhun-kim/hermes-autonomous-agent-system"
     assert request.request_text == "이 레포에 자동 finalize 붙여줘"
+
+
+def test_parse_discord_request_prefers_thread_then_channel_then_default_repo() -> None:
+    config = DiscordRequestRouterConfig(
+        default_repo="owner/default",
+        channel_default_repos={
+            "channel-1": "owner/channel",
+            "thread-1": "owner/thread",
+        },
+    )
+
+    request = parse_discord_request(
+        "Hermes, implement routing",
+        config=config,
+        channel_id="channel-1",
+        thread_id="thread-1",
+    )
+
+    assert request.repo_raw == "owner/thread"
+    assert request.request_text == "implement routing"
+
+
+def test_load_router_config_from_json_file_and_cli_overrides(tmp_path: Path) -> None:
+    config_path = tmp_path / "gateway.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "repo_aliases": {"hasystem": "owner/from-config"},
+                "channel_default_repos": {"channel-1": "owner/channel-config"},
+                "allow_repos": ["owner/from-cli", "owner/thread-cli"],
+                "default_repo": "owner/default-config",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_router_config(
+        config_path,
+        repo_alias_overrides={"hasystem": "owner/from-cli"},
+        channel_default_repo_overrides={"thread-1": "owner/thread-cli"},
+        default_repo_override=None,
+    )
+
+    assert config.resolve_alias("hasystem") == "owner/from-cli"
+    assert config.default_for_context(channel_id="channel-1") == "owner/channel-config"
+    assert config.default_for_context(thread_id="thread-1") == "owner/thread-cli"
+    assert config.default_repo == "owner/default-config"
+    assert config.allow_repos == frozenset({"owner/from-cli", "owner/thread-cli"})
+
+
+def test_parse_discord_request_rejects_repos_not_in_allowlist() -> None:
+    config = DiscordRequestRouterConfig(default_repo="owner/default", allow_repos=frozenset({"owner/allowed"}))
+
+    with pytest.raises(DiscordRequestParseError, match="not allowed"):
+        parse_discord_request("Hermes, ship it", config=config)
 
 
 def test_parse_discord_request_resolves_repo_field_alias() -> None:
@@ -150,4 +257,44 @@ def test_discord_automation_dry_run_only_parses_message(tmp_path: Path) -> None:
     assert result.request.request_text == "Ship it"
     assert result.intake is None
     assert result.loop is None
+    assert runner.commands == []
+
+
+def test_gateway_response_dry_run_is_structured_and_non_mutating(tmp_path: Path) -> None:
+    runner = RecordingCommandRunner([])
+    workspace = Workspace(tmp_path / "workspace", runner)
+    service = DiscordAutomationService(
+        intake=IntakeService(workspace=workspace, runner=runner),
+        loop_runner=RunLoopService(
+            workspace=workspace,
+            store=StateStore(tmp_path / "state.db"),
+            worker=CodexWorkerLauncher(runner=runner),
+            github_factory=lambda repo: GitHubClient(repo=repo, runner=runner),
+        ),
+        router_config=DiscordRequestRouterConfig(
+            repo_aliases={"hasystem": "jhun-kim/hermes-autonomous-agent-system"}
+        ),
+    )
+    event = DiscordGatewayEvent.from_json(
+        json.dumps(
+            {
+                "platform": "discord",
+                "channel_id": "channel-1",
+                "content": "Hermes, hasystem integrate gateway adapter",
+                "dry_run": True,
+            }
+        )
+    )
+
+    payload = build_gateway_response(service=service, event=event, dry_run_override=None, no_run_loop_override=None)
+
+    assert payload["status"] == "dry_run"
+    assert payload["repo"] == "jhun-kim/hermes-autonomous-agent-system"
+    assert payload["parsed_request"] == {
+        "repo_raw": "jhun-kim/hermes-autonomous-agent-system",
+        "request_text": "integrate gateway adapter",
+    }
+    assert payload["intake"] is None
+    assert payload["loop"] is None
+    assert payload["hints"]["next_action"] == "Remove dry-run to create an issue and optionally start the run loop."
     assert runner.commands == []

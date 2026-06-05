@@ -34,6 +34,93 @@ def test_hermes_finalize_console_script_entrypoint_exists() -> None:
     assert scripts["hermes-finalize"].strip('"') == "hasystem.commands.finalize:main"
 
 
+def test_hermes_gateway_adapter_console_script_entrypoint_exists() -> None:
+    # Given: the project package metadata.
+    pyproject = ConfigParser()
+    pyproject.read(Path("pyproject.toml"))
+
+    # When: console scripts are inspected.
+    scripts = pyproject["project.scripts"]
+
+    # Then: hermes-gateway-adapter points at the stable gateway adapter command.
+    assert scripts["hermes-gateway-adapter"].strip('"') == "hasystem.commands.gateway_adapter:main"
+
+
+def test_gateway_adapter_module_accepts_event_json_and_prints_structured_dry_run(tmp_path: Path) -> None:
+    # Given: a Discord/Gateway event JSON payload and isolated state/workspace paths.
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path("src").resolve())
+    event = (
+        '{"platform":"discord","channel_id":"channel-1",'
+        '"content":"Hermes, hasystem implement gateway adapter","dry_run":true}'
+    )
+
+    # When: the adapter command handles the event in dry-run mode.
+    state_db = tmp_path / "state.db"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "hasystem.commands.gateway_adapter",
+            "--event-json",
+            event,
+            "--repo-alias",
+            "hasystem=owner/repo",
+            "--state-db",
+            str(state_db),
+            "--workspace",
+            str(tmp_path / "workspace"),
+        ],
+        cwd=Path.cwd(),
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    # Then: stdout is structured JSON and no stderr failure is reported.
+    assert result.returncode == 0, result.stderr
+    payload = __import__("json").loads(result.stdout)
+    assert payload["status"] == "dry_run"
+    assert payload["repo"] == "owner/repo"
+    assert payload["parsed_request"]["request_text"] == "implement gateway adapter"
+    assert not state_db.exists()
+
+
+def test_gateway_adapter_non_dry_run_requires_allow_repo_before_state_write(tmp_path: Path) -> None:
+    # Given: a non-dry-run gateway event with no allow-list.
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path("src").resolve())
+    state_db = tmp_path / "state.db"
+
+    # When: the adapter is invoked without --allow-repo or --allow-any-repo.
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "hasystem.commands.gateway_adapter",
+            "--event-json",
+            '{"platform":"discord","content":"Hermes, owner/repo implement gateway adapter"}',
+            "--state-db",
+            str(state_db),
+            "--workspace",
+            str(tmp_path / "workspace"),
+        ],
+        cwd=Path.cwd(),
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    # Then: the adapter fails closed before initializing state or workspace mutations.
+    assert result.returncode == 2
+    payload = __import__("json").loads(result.stderr)
+    assert payload["status"] == "error"
+    assert "requires allow_repos" in payload["error"]
+    assert not state_db.exists()
+
+
 def test_finalize_module_reports_missing_active_loop_with_documented_exit_code(tmp_path: Path) -> None:
     # Given: an empty Hermes state database and the module CLI entrypoint.
     env = os.environ.copy()

@@ -35,6 +35,87 @@ PYTHONPATH=src python3 -m hasystem.commands.run_loop --repo owner/name --dry-run
 
 Hermes can call the CLIs directly from a Discord command handler.
 
+### Gateway adapter for real Discord/Hermes wiring
+
+For a production Hermes Discord/Gateway tool wrapper, prefer the structured
+adapter. It accepts one JSON event envelope on stdin or `--event-json`, routes
+the event through `DiscordAutomationService`, and prints one structured JSON
+object that a gateway can forward back to Discord or to a tool runtime.
+
+Minimum dry-run event:
+
+```bash
+printf '%s\n' '{
+  "platform": "discord",
+  "guild_id": "123",
+  "channel_id": "1512060115757432833",
+  "thread_id": "1512060115757432833",
+  "sender": {"id": "42", "display_name": "Chai"},
+  "content": "Hermes, hasystem integrate the gateway adapter",
+  "dry_run": true
+}' | PYTHONPATH=src python3 -m hasystem.commands.gateway_adapter \
+  --repo-alias hasystem=jhun-kim/hermes-autonomous-agent-system
+```
+
+The same payload can be passed with `--event-json`. The output includes
+`status`, `repo`, `parsed_request`, `intake`, `loop`, and `hints`. In dry-run
+mode, `intake` and `loop` are `null` and Hermes proves the routing decision
+without creating issues, changing labels, writing loop state, cloning/updating
+repos, or launching workers.
+
+Router config can live in JSON:
+
+```json
+{
+  "repo_aliases": {
+    "hasystem": "jhun-kim/hermes-autonomous-agent-system"
+  },
+  "channel_default_repos": {
+    "1512060115757432833": "jhun-kim/hermes-autonomous-agent-system"
+  },
+  "allow_repos": ["jhun-kim/hermes-autonomous-agent-system"],
+  "default_repo": "jhun-kim/hermes-autonomous-agent-system"
+}
+```
+
+Use it like this:
+
+```bash
+PYTHONPATH=src python3 -m hasystem.commands.gateway_adapter \
+  --config hermes-router.json \
+  --event-json '{"platform":"discord","channel_id":"1512060115757432833","content":"Hermes, 다음 단계 진행해줘","dry_run":true}'
+```
+
+CLI flags override config for aliases, channel/thread defaults, default repo,
+and allow-list entries:
+
+```bash
+PYTHONPATH=src python3 -m hasystem.commands.gateway_adapter \
+  --config hermes-router.json \
+  --repo-alias hasystem=jhun-kim/hermes-autonomous-agent-system \
+  --channel-default-repo 1512060115757432833=jhun-kim/hermes-autonomous-agent-system \
+  --allow-repo jhun-kim/hermes-autonomous-agent-system \
+  --dry-run \
+  --event-json '{"platform":"discord","content":"Hermes, hasystem run the next task"}'
+```
+
+When wiring this into a real Hermes Discord/Gateway workflow:
+
+1. The gateway should send the raw Discord content plus platform, guild,
+   channel, thread, and sender fields as the event envelope.
+2. Use `dry_run: true` first to verify repo selection in each channel/thread.
+3. Remove dry-run only after the channel config and `allow_repos` list are
+   correct.
+4. Use `no_run_loop: true` or `--no-run-loop` when Hermes should create an
+   issue but defer worker launch.
+5. Non-dry-run gateway routing fails closed unless config includes `allow_repos`
+   or the CLI supplies `--allow-repo`. `--allow-any-repo` exists for trusted
+   private gateways only.
+6. Start `/restart` or a new Codex session whenever the worker runtime, OmX/OmO
+   session routing, environment variables, installed console scripts, or router
+   config file path changes. For ordinary new Discord requests in an already
+   configured session, a restart is not required; send a new event envelope.
+
 One-shot Discord/Gateway handler: parse a raw message, clone/update the repo, create the issue, select the ready issue, persist loop state, mark it in progress, and open a Codex worker Terminal session:
 
 ```bash
@@ -133,4 +214,4 @@ PYTHONPATH=src python3 -m hasystem.commands.finalize \
   --dry-run
 ```
 
-After installing the package, the equivalent console scripts are `hermes-discord-request`, `hermes-intake`, `hermes-run-loop`, `hermes-run-once`, and `hermes-finalize`.
+After installing the package, the equivalent console scripts are `hermes-discord-request`, `hermes-gateway-adapter`, `hermes-intake`, `hermes-run-loop`, `hermes-run-once`, and `hermes-finalize`.

@@ -7,6 +7,7 @@ dependencies = []
 
 [project.scripts]
 hermes-discord-request = "hasystem.commands.discord_request:main"
+hermes-gateway-adapter = "hasystem.commands.gateway_adapter:main"
 hermes-intake = "hasystem.commands.intake:main"
 hermes-run-loop = "hasystem.commands.run_loop:main"
 hermes-run-once = "hasystem.commands.run_once:main"
