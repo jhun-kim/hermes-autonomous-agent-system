@@ -155,18 +155,45 @@ Use this checklist before pointing a production Hermes Discord gateway at
 2. Validate channel/thread routing in dry-run mode with
    `examples/hermes-gateway-event.dry-run.json`; confirm the selected `repo`,
    `status`, and `hints` are what the gateway should report to Discord.
-3. Run the isolated live-mode fixture before enabling live Discord events:
-   `python3 -m pytest -q tests/test_gateway_wrapper_live_fixture.py`.
-4. Review the fail-closed repository boundary. Keep production repos in
+3. Optional automatic Discord intake uses the Hermes plugin extension point,
+   not a core gateway fork: install
+   `integrations/hermes_plugins/hasystem_gateway_intake/` as the user plugin
+   directory `~/.hermes/plugins/hasystem-gateway-intake/`, add
+   `hasystem-gateway-intake` to `plugins.enabled`, and restart the gateway.
+   Hermes invokes the plugin via `pre_gateway_dispatch` before auth/pairing and
+   ordinary agent dispatch. The plugin only intercepts explicit routing commands
+   so ordinary chat still reaches Hermes unchanged:
+   - exact `godmode`, `godmode status`, `godmode pause`, `godmode resume`, or
+     `godmode stop` controls;
+   - `/hasystem ...`, `!hasystem ...`, `@hasystem ...`, or `hasystem ...`.
+
+   Configure the live adapter command and parent-channel guardrail in the
+   gateway environment or launchd service:
+
+   ```bash
+   export HASYSTEM_GATEWAY_ADAPTER_COMMAND="$HOME/.hermes/hasystem-gateway-runtime/hasystem-gateway-wrapper --live"
+   export HASYSTEM_GATEWAY_PARENT_CHANNEL_IDS="1478650642854580434"
+   ```
+
+   For a Discord thread message, the plugin builds the adapter envelope with
+   `guild_id`, parent `channel_id`, `thread_id`/`thread_name`, sender metadata,
+   message id, and stripped command content, then returns
+   `{ "action": "skip" }` from `pre_gateway_dispatch` after scheduling the
+   adapter response back to the same Discord thread. Keep `allow_repos` in the
+   router JSON; the wrapper's live mode remains fail-closed.
+4. Run the isolated live-mode fixture before enabling live Discord events:
+   `python3 -m pytest -q tests/test_gateway_wrapper_live_fixture.py tests/test_hasystem_gateway_intake_plugin.py`.
+5. Review the fail-closed repository boundary. Keep production repos in
    `allow_repos` or pass explicit `--allow-repo owner/repo` entries; do not use
    `--allow-any-repo` by default.
-5. Restart only at runtime boundaries: use `/restart` or restart the gateway
+6. Restart only at runtime boundaries: use `/restart` or restart the gateway
    process after changing the installed wrapper/adapter, cmux worker-surface
-   runtime, environment variables, or router config file path. Ordinary new
-   Discord requests in an already configured runtime do not require restart.
-6. Keep a rollback note with the previous wrapper path, router config path, and
-   adapter version so rollback is a config/path revert plus the same restart
-   boundary from step 5.
+   runtime, environment variables, router config file path, or installed plugin
+   files. Ordinary new Discord requests in an already configured runtime do not
+   require restart.
+7. Keep a rollback note with the previous wrapper path, router config path,
+   plugin enabled state, and adapter version so rollback is a config/path revert
+   plus the same restart boundary from step 6.
 
 ### Gateway adapter for real Discord/Hermes wiring
 
