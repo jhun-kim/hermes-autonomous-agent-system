@@ -14,6 +14,7 @@ from hasystem.hermes_context import (
 )
 from hasystem.intake import IntakeService
 from hasystem.loop_runner import RunLoopService
+from hasystem.runtime_hook import dispatch_runtime_context_compression
 from hasystem.state_store import StateStore
 from hasystem.worker import CodexWorkerLauncher
 from hasystem.workspace import Workspace
@@ -49,6 +50,8 @@ def test_builds_context_compaction_event_with_required_handoff_metadata() -> Non
     assert event.active_issue_number == 22
     assert event.active_issue_title == "Wire real Hermes compression"
     assert event.active_issue_labels == ["ai:in-progress"]
+    assert event.compression_summary == "Compressed last 80 messages into a compact state."
+    assert event.handoff_context == "Continue from the gateway adapter wiring tests."
     assert "Compressed last 80 messages" in (event.session_summary or "")
     assert "Continue from the gateway adapter" in (event.session_summary or "")
 
@@ -108,11 +111,54 @@ def test_low_threshold_automatic_compression_dispatch_triggers_rollover(tmp_path
     assert result.payload["event"]["repo"] == "owner/repo"
     assert result.payload["event"]["latest_user_goal"] == "finish issue #22"
     assert result.payload["event"]["active_issue"]["number"] == 22
+    assert result.payload["event"]["compression_summary"] == "Summary from automatic context compression."
+    assert result.payload["event"]["handoff_context"] == "Handoff for the next Hermes session."
+    assert result.payload["continuation"]["conversation_id"] == "discord:thread-1"
     assert result.payload["continuation"]["new_thread_id"] == "thread-auto-new"
     assert discord.created_parent_channel_ids == ["channel-1"]
     assert discord.messages[0][0] == "thread-1"
     assert discord.messages[1][0] == "thread-auto-new"
     assert runner.commands == []
+
+
+def test_lifecycle_hook_adapter_dispatches_from_old_session_to_rotated_session(tmp_path: Path) -> None:
+    # Given: Hermes has just compressed a Discord conversation and rotated the runtime session id.
+    runner = RecordingCommandRunner([])
+    store = StateStore(tmp_path / "state.db")
+    service = _service(tmp_path=tmp_path, store=store, runner=runner, threshold=1)
+    discord = FakeDiscordContinuationClient()
+    runtime_event = {
+        "platform": "discord",
+        "discord": {"guild_id": "guild-1", "channel_id": "channel-1", "thread_id": "thread-1"},
+        "session": {"old_id": "old-session-1", "new_id": "new-session-2"},
+        "repository": "owner/repo",
+        "latest_goal": "finish issue #25",
+        "active_issue": {"number": 25, "title": "Connect live hook", "labels": ["ai:in-progress"]},
+        "compression": {
+            "summary": "Summary after successful lifecycle compression.",
+            "handoff_context": "Continue in the rotated Hermes session.",
+        },
+    }
+
+    # When: the live-hook adapter receives the lifecycle boundary event rather than a gateway event.
+    result = dispatch_runtime_context_compression(
+        data=runtime_event,
+        config=HermesContextCompressionDispatchConfig(enabled=True),
+        service=service,
+        state_store=store,
+        discord_client=discord,
+    )
+
+    # Then: rollover is keyed to the Discord thread while preserving old and new Hermes session metadata.
+    assert result.dispatched is True
+    assert result.payload is not None
+    assert result.payload["status"] == "rollover_required"
+    assert result.payload["event"]["session_id"] == "old-session-1"
+    assert result.payload["event"]["new_session_id"] == "new-session-2"
+    assert result.payload["event"]["compression_summary"] == "Summary after successful lifecycle compression."
+    assert result.payload["event"]["handoff_context"] == "Continue in the rotated Hermes session."
+    assert result.payload["continuation"]["conversation_id"] == "discord:thread-1"
+    assert result.payload["continuation"]["new_thread_id"] == "thread-auto-new"
 
 
 def _compression(*, platform: str) -> HermesContextCompression:

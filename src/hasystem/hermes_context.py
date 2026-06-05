@@ -31,6 +31,7 @@ class HermesContextCompression:
     active_issue: ActiveIssueContext | None = None
     compression_summary: str | None = None
     handoff_context: str | None = None
+    new_session_id: str | None = None
 
     def to_gateway_event(self) -> DiscordGatewayEvent:
         return DiscordGatewayEvent(
@@ -49,6 +50,9 @@ class HermesContextCompression:
             active_issue_number=self.active_issue.number if self.active_issue is not None else None,
             active_issue_title=self.active_issue.title if self.active_issue is not None else None,
             active_issue_labels=list(self.active_issue.labels) if self.active_issue is not None else [],
+            compression_summary=self.compression_summary,
+            handoff_context=self.handoff_context,
+            new_session_id=self.new_session_id,
             context_compaction=True,
             event_type="context.compaction",
         )

@@ -23,6 +23,9 @@ class GatewayEventPayloadSource(Protocol):
     active_issue_number: int | None
     active_issue_title: str | None
     active_issue_labels: list[str]
+    compression_summary: str | None
+    handoff_context: str | None
+    new_session_id: str | None
     session_summary: str | None
     context_compaction: bool
     event_type: str | None
@@ -121,6 +124,7 @@ def event_payload(event: GatewayEventPayloadSource) -> JsonObject:
         "sender_id": event.sender_id,
         "sender_display_name": event.sender_display_name,
         "session_id": event.session_id,
+        "new_session_id": event.new_session_id,
         "repo": event.repo_hint,
         "latest_user_goal": event.latest_user_goal,
         "active_issue": {
@@ -130,5 +134,7 @@ def event_payload(event: GatewayEventPayloadSource) -> JsonObject:
         }
         if event.active_issue_number is not None
         else None,
+        "compression_summary": event.compression_summary,
+        "handoff_context": event.handoff_context,
         "session_summary": event.session_summary,
     }
