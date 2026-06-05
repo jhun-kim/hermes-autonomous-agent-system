@@ -1,18 +1,19 @@
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import shutil
 import textwrap
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from collections.abc import Sequence
 from typing import Literal, Protocol
 
 from .command_runner import CommandSpec, SubprocessCommandRunner
 from .models import GitHubIssue
 
-WorkerExecutor = Literal["lazycodex", "omx"]
+WorkerExecutor = Literal["lazycodex", "codex", "omx", "omo"]
 
 
 class WorkerCommandRunner(Protocol):
@@ -26,6 +27,34 @@ class WorkerCommandRunner(Protocol):
 
 
 @dataclass(frozen=True)
+class WorkerLaunchContext:
+    """Context used to place worker engines inside the right cmux workspace."""
+
+    platform: str | None = None
+    guild_id: str | None = None
+    channel_id: str | None = None
+    channel_name: str | None = None
+    thread_id: str | None = None
+    thread_name: str | None = None
+    conversation_id: str | None = None
+
+    @property
+    def has_discord_thread(self) -> bool:
+        return self.platform == "discord" and bool(self.thread_id or self.channel_id or self.conversation_id)
+
+    def cmux_workspace_name(self, repo: str | None = None) -> str | None:
+        if not self.has_discord_thread:
+            return None
+        readable_name = self.thread_name or self.channel_name or "Discord thread"
+        stable_id = self.thread_id or self.channel_id or self.conversation_id or "unknown"
+        suffix = _compact_identifier(stable_id)
+        base = f"discord: {readable_name} [{suffix}]"
+        if repo:
+            base = f"{base} · {repo}"
+        return _cmux_safe_title(base)
+
+
+@dataclass(frozen=True)
 class CodexWorkerLauncher:
     runner: WorkerCommandRunner | None = None
     executor: WorkerExecutor = "lazycodex"
@@ -34,10 +63,12 @@ class CodexWorkerLauncher:
 
     def build(self, repo_path: Path, repo: str, issue: GitHubIssue, branch: str) -> CommandSpec:
         prompt = _worker_prompt(repo=repo, issue=issue, branch=branch)
-        if self.executor == "lazycodex":
+        if self.executor in {"lazycodex", "codex"}:
             return CommandSpec(args=("codex", "."), cwd=repo_path, stdin_text=prompt)
         if self.executor == "omx":
             return CommandSpec(args=("omx", "exec", "--full-auto", prompt), cwd=repo_path)
+        if self.executor == "omo":
+            return CommandSpec(args=("omo", "exec", "--full-auto", prompt), cwd=repo_path)
         raise ValueError(f"Unsupported worker executor: {self.executor}")
 
     def build_worker_shell_script(self, command: CommandSpec) -> str:
@@ -45,17 +76,41 @@ class CodexWorkerLauncher:
         if command.args == ("codex", "."):
             quoted_prompt = shlex.quote(command.stdin_text)
             return f"cd {quoted_cd} && printf %s {quoted_prompt} | codex ."
-        if command.args[0:3] == ("omx", "exec", "--full-auto") and len(command.args) == 4:
-            return f"cd {quoted_cd} && omx exec --full-auto {shlex.quote(command.args[3])}"
+        if command.args[0:3] in {("omx", "exec", "--full-auto"), ("omo", "exec", "--full-auto")} and len(command.args) == 4:
+            executable = command.args[0]
+            return f"cd {quoted_cd} && {executable} exec --full-auto {shlex.quote(command.args[3])}"
         joined = " ".join(shlex.quote(part) for part in command.args)
         return f"cd {quoted_cd} && {joined}"
 
-    def build_cmux_command(self, command: CommandSpec, *, env: dict[str, str] | None = None) -> CommandSpec:
+    def build_cmux_command(
+        self,
+        command: CommandSpec,
+        *,
+        env: dict[str, str] | None = None,
+        launch_context: WorkerLaunchContext | None = None,
+        repo: str | None = None,
+    ) -> CommandSpec:
         active_env = env or os.environ
         script = self.build_worker_shell_script(command)
         workspace_id = active_env.get("CMUX_WORKSPACE_ID", "").strip()
         if workspace_id:
             return CommandSpec(args=("/bin/sh", "-lc", _cmux_surface_script(self.cmux_binary, workspace_id, script)))
+
+        discord_workspace_name = launch_context.cmux_workspace_name(repo=repo) if launch_context else None
+        if discord_workspace_name:
+            cwd = str(command.cwd or Path.cwd())
+            return CommandSpec(
+                args=(
+                    "/bin/sh",
+                    "-lc",
+                    _cmux_discord_workspace_surface_script(
+                        self.cmux_binary,
+                        workspace_name=discord_workspace_name,
+                        cwd=cwd,
+                        worker_script=script,
+                    ),
+                )
+            )
 
         cwd = str(command.cwd or Path.cwd())
         title = _cmux_workspace_title(command)
@@ -78,10 +133,10 @@ class CodexWorkerLauncher:
         script = self.build_worker_shell_script(command)
         return CommandSpec(args=("osascript", "-e", f'tell application "Terminal" to do script {script!r}'))
 
-    def launch(self, command: CommandSpec) -> None:
+    def launch(self, command: CommandSpec, *, launch_context: WorkerLaunchContext | None = None, repo: str | None = None) -> None:
         active_runner = self.runner or SubprocessCommandRunner()
         if self.prefer_cmux and shutil.which(self.cmux_binary):
-            cmux_command = self.build_cmux_command(command)
+            cmux_command = self.build_cmux_command(command, launch_context=launch_context, repo=repo)
             active_runner.run(cmux_command.args, cwd=cmux_command.cwd, stdin_text=cmux_command.stdin_text or None)
             return
 
@@ -114,14 +169,58 @@ def _cmux_surface_script(cmux_binary: str, workspace_id: str, worker_script: str
     ).strip()
 
 
+def _cmux_discord_workspace_surface_script(cmux_binary: str, *, workspace_name: str, cwd: str, worker_script: str) -> str:
+    quoted_cmux = shlex.quote(cmux_binary)
+    quoted_workspace_name = shlex.quote(workspace_name)
+    quoted_cwd = shlex.quote(cwd)
+    quoted_worker_script = shlex.quote(worker_script + "\n")
+    return textwrap.dedent(
+        f"""
+        set -eu
+        workspace_name={quoted_workspace_name}
+        workspace_json=$({quoted_cmux} --json workspace list)
+        workspace_id=$(printf '%s' "$workspace_json" | python3 -c 'import json, sys; name=sys.argv[1]; data=json.load(sys.stdin); items=data.get("workspaces") if isinstance(data, dict) else data; items=items or []; print(next((w.get("id") or w.get("workspace_id") or w.get("workspace_ref") or "" for w in items if w.get("name") == name or w.get("title") == name), ""))' "$workspace_name")
+        if [ -z "$workspace_id" ]; then
+          created_json=$({quoted_cmux} --json new-workspace --name "$workspace_name" --cwd {quoted_cwd} --focus false)
+          workspace_id=$(printf '%s' "$created_json" | python3 -c 'import json, sys; data=json.load(sys.stdin); print(data.get("workspace_ref") or data.get("workspace_id") or data.get("id") or "")')
+        fi
+        if [ -z "$workspace_id" ]; then
+          echo "cmux did not return a workspace id" >&2
+          exit 1
+        fi
+        surface_json=$({quoted_cmux} --json new-surface --workspace "$workspace_id" --type terminal --focus false)
+        surface_id=$(printf '%s' "$surface_json" | python3 -c 'import json, sys; data=json.load(sys.stdin); print(data.get("surface_ref") or data.get("surface_id") or data.get("id") or "")')
+        if [ -z "$surface_id" ]; then
+          echo "cmux did not return a surface id" >&2
+          exit 1
+        fi
+        {quoted_cmux} send --surface "$surface_id" {quoted_worker_script}
+        """
+    ).strip()
+
+
 def _cmux_workspace_title(command: CommandSpec) -> str:
     cwd = command.cwd.name if command.cwd else "workspace"
-    return f"agent: {cwd}"[:80]
+    return _cmux_safe_title(f"agent: {cwd}")
+
+
+def _cmux_safe_title(raw: str) -> str:
+    compact = re.sub(r"\s+", " ", raw).strip()
+    return compact[:80] or "agent workspace"
+
+
+def _compact_identifier(raw: str) -> str:
+    compact = re.sub(r"[^A-Za-z0-9_.:-]+", "-", raw).strip("-")
+    if len(compact) <= 24:
+        return compact or "unknown"
+    return compact[-24:]
 
 
 def _worker_prompt(repo: str, issue: GitHubIssue, branch: str) -> str:
     return (
         "Use the repository issue-first agent workflow for this coding task. "
+        "Run inside the cmux workspace/surface assigned to this Discord thread; add cmux surfaces for parallel "
+        "Codex/OmX/OmO workers when useful instead of opening unrelated terminals. "
         "When OmO/OmX standards are relevant inside the agent session, treat ULW as the optional execution discipline, "
         "but do not use OmO/OmX as the terminal/session orchestration mechanism.\n"
         "Repository rule: issue first, code second. Before modifying code, confirm the selected GitHub issue "

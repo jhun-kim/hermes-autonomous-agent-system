@@ -263,6 +263,61 @@ def test_discord_automation_intakes_issue_and_launches_worker(tmp_path: Path) ->
     assert "do not use OmO/OmX as the terminal/session orchestration mechanism" in result.loop.worker_command.stdin_text
 
 
+def test_discord_automation_maps_thread_to_cmux_workspace_surface(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Given: cmux is installed and a Discord thread starts a run-loop worker.
+    monkeypatch.setattr("hasystem.worker.shutil.which", lambda binary: f"/usr/bin/{binary}" if binary == "cmux" else None)
+    issue_json = json.dumps(
+        [
+            {
+                "number": 42,
+                "title": "Fix auth and run tests",
+                "body": "Fix auth and run tests",
+                "labels": [{"name": "ai:ready"}, {"name": "priority:p2"}],
+            }
+        ]
+    )
+    runner = RecordingCommandRunner(
+        [
+            CommandResult(stdout="", stderr="", returncode=0),
+            *[CommandResult(stdout="", stderr="", returncode=0) for _ in DEFAULT_AI_LABELS],
+            CommandResult(stdout="https://github.com/owner/repo/issues/42\n", stderr="", returncode=0),
+            CommandResult(stdout=issue_json, stderr="", returncode=0),
+            CommandResult(stdout="", stderr="", returncode=0),
+            CommandResult(stdout="", stderr="", returncode=0),
+            CommandResult(stdout="", stderr="", returncode=0),
+        ]
+    )
+    workspace = Workspace(tmp_path / "workspace", runner)
+    service = DiscordAutomationService(
+        intake=IntakeService(workspace=workspace, runner=runner),
+        loop_runner=RunLoopService(
+            workspace=workspace,
+            store=StateStore(tmp_path / "state.db"),
+            worker=CodexWorkerLauncher(runner=runner),
+            github_factory=lambda repo: GitHubClient(repo=repo, runner=runner),
+        ),
+        router_config=DiscordRequestRouterConfig(default_repo="owner/repo"),
+    )
+
+    # When: the message is handled with Discord thread metadata.
+    result = service.handle(
+        "Hermes, Fix auth and run tests",
+        channel_id="channel-1",
+        channel_name="agent messages",
+        thread_id="thread-42",
+        thread_name="Implementation Room",
+    )
+
+    # Then: the worker engine is launched in a cmux surface within the Discord-thread workspace.
+    assert result.loop is not None
+    assert runner.commands[-1][0:2] == ("/bin/sh", "-lc")
+    script = runner.commands[-1][-1]
+    assert "workspace list" in script
+    assert "discord: Implementation Room [thread-42] · owner/repo" in script
+    assert "new-surface --workspace \"$workspace_id\" --type terminal --focus false" in script
+    assert "codex ." in script
+
+
 def test_discord_automation_dry_run_only_parses_message(tmp_path: Path) -> None:
     runner = RecordingCommandRunner([])
     workspace = Workspace(tmp_path / "workspace", runner)

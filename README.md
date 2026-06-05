@@ -21,9 +21,11 @@ External commands go through a subprocess runner abstraction so tests can fake `
 Repository coding work is orchestrated through [cmux](https://github.com/manaflow-ai/cmux) workspace and surface primitives when cmux is installed:
 
 - If the runtime is already inside cmux, `CMUX_WORKSPACE_ID` is the default target. The launcher creates an additional terminal surface in that caller workspace and sends the worker command there.
-- If no caller workspace is available, the launcher creates one cmux workspace rooted at the target repository with `cmux new-workspace --cwd <repo> --command <worker> --focus false`.
-- Worker launches are additive and focus-neutral. Do not select other workspaces, focus panes, or open unbounded Terminal.app windows for parallel coding work.
-- `executor:lazycodex` and `executor:omx` still select the worker engine/prompt shape. They do not select the terminal/session manager; cmux owns that layer.
+- For Discord-originated work, the Discord thread is the workspace boundary. The launcher derives a deterministic workspace name from `thread_name`/`thread_id` (falling back to channel context), reuses that workspace when present, creates it when absent, and adds one terminal surface per worker launch.
+- Parallel decomposition should increase surfaces inside the same Discord-thread workspace: Codex, OmX, and OmO workers can run side by side as separate cmux surfaces for the same thread.
+- If no Discord context or caller workspace is available, the launcher creates one cmux workspace rooted at the target repository with `cmux new-workspace --cwd <repo> --command <worker> --focus false`.
+- Worker launches are additive and focus-neutral. Do not select other workspaces, focus panes, open unbounded Terminal.app windows, or create unrelated cmux workspaces for parallel coding work.
+- `executor:lazycodex`/`executor:codex`, `executor:omx`, and `executor:omo` select the worker engine/prompt shape. They do not select the terminal/session manager; cmux owns that layer.
 - Headless CI/tests can disable cmux preference or run dry-run mode to avoid live cmux socket access.
 
 ## Operating rule: issue first, code second

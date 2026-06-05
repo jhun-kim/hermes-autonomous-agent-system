@@ -6,7 +6,7 @@ from hasystem.command_runner import CommandResult, RecordingCommandRunner
 from hasystem.loop_runner import RunLoopService
 from hasystem.models import GitHubIssue, LoopState
 from hasystem.state_store import StateStore
-from hasystem.worker import CodexWorkerLauncher
+from hasystem.worker import CodexWorkerLauncher, WorkerLaunchContext
 from hasystem.workspace import Workspace
 
 
@@ -25,6 +25,7 @@ def test_codex_worker_launcher_builds_target_repo_command(tmp_path: Path) -> Non
     assert "Issue #7: Implement parser" in command.stdin_text
     assert "Labels: ai:ready" in command.stdin_text
     assert "issue-first agent workflow" in command.stdin_text
+    assert "Run inside the cmux workspace/surface assigned to this Discord thread" in command.stdin_text
     assert "ULW as the optional execution discipline" in command.stdin_text
     assert "do not use OmO/OmX as the terminal/session orchestration mechanism" in command.stdin_text
     assert "issue first, code second" in command.stdin_text
@@ -87,6 +88,73 @@ def test_cmux_launcher_creates_workspace_when_no_caller_workspace(tmp_path: Path
     assert "--command" in cmux_command.args
     assert "--focus" in cmux_command.args
     assert "false" in cmux_command.args
+
+
+def test_cmux_launcher_targets_discord_thread_workspace_and_adds_surface(tmp_path: Path) -> None:
+    # Given: a Discord thread context and a worker command outside a caller cmux workspace.
+    launcher = CodexWorkerLauncher(cmux_binary="cmux")
+    issue = GitHubIssue(number=42, title="Thread workspace", body="Use cmux", labels=["ai:ready"])
+    worker_command = launcher.build(repo_path=tmp_path, repo="owner/repo", issue=issue, branch="ai/issue-42-thread-workspace")
+    context = WorkerLaunchContext(
+        platform="discord",
+        guild_id="guild-1",
+        channel_id="channel-1",
+        channel_name="agent messages",
+        thread_id="1512332564218773564",
+        thread_name="Hermes continuation after 2 compactions",
+    )
+
+    # When: building the cmux launch command without an active cmux env.
+    cmux_command = launcher.build_cmux_command(worker_command, env={}, launch_context=context, repo="owner/repo")
+
+    # Then: the command reuses or creates one deterministic Discord-thread workspace and adds a terminal surface.
+    assert cmux_command.args[0:2] == ("/bin/sh", "-lc")
+    script = cmux_command.args[-1]
+    assert "workspace list" in script
+    assert "discord: Hermes continuation after 2 compactions" in script
+    assert "1512332564218773564"[-24:] in script
+    assert "owner/repo" in script
+    assert "new-workspace --name" in script
+    assert "new-surface --workspace \"$workspace_id\" --type terminal --focus false" in script
+    assert "cmux send --surface" in script
+    assert "codex ." in script
+
+
+def test_cmux_launcher_distributes_parallel_workers_as_surfaces_in_same_discord_workspace(tmp_path: Path) -> None:
+    # Given: two different worker engines for the same Discord thread.
+    context = WorkerLaunchContext(platform="discord", thread_id="thread-42", thread_name="Implementation Room")
+    issue = GitHubIssue(number=42, title="Parallel workers", body="Split work", labels=["ai:ready"])
+    codex = CodexWorkerLauncher(cmux_binary="cmux")
+    omx = CodexWorkerLauncher(cmux_binary="cmux", executor="omx")
+    codex_command = codex.build(repo_path=tmp_path, repo="owner/repo", issue=issue, branch="ai/issue-42-parallel")
+    omx_command = omx.build(repo_path=tmp_path, repo="owner/repo", issue=issue, branch="ai/issue-42-parallel")
+
+    # When: both launch commands are built for the same Discord thread.
+    codex_script = codex.build_cmux_command(codex_command, env={}, launch_context=context, repo="owner/repo").args[-1]
+    omx_script = omx.build_cmux_command(omx_command, env={}, launch_context=context, repo="owner/repo").args[-1]
+
+    # Then: both target the same cmux workspace name and differ only by worker engine surface command.
+    expected_workspace = "discord: Implementation Room [thread-42] · owner/repo"
+    assert expected_workspace in codex_script
+    assert expected_workspace in omx_script
+    assert "codex ." in codex_script
+    assert "omx exec --full-auto" in omx_script
+    assert codex_script.count("new-surface") == 1
+    assert omx_script.count("new-surface") == 1
+
+
+def test_omo_worker_launcher_builds_surface_engine_command(tmp_path: Path) -> None:
+    # Given: an OmO executor request.
+    launcher = CodexWorkerLauncher(executor="omo")
+    issue = GitHubIssue(number=42, title="Run with OmO", body="Use OmO", labels=["ai:ready", "executor:omo"])
+
+    # When: the worker command is built.
+    command = launcher.build(repo_path=tmp_path, repo="owner/repo", issue=issue, branch="ai/issue-42-run-with-omo")
+
+    # Then: OmO is represented as a worker engine that can be run inside a cmux surface.
+    assert command.cwd == tmp_path
+    assert command.args[0:3] == ("omo", "exec", "--full-auto")
+    assert "Issue #42: Run with OmO" in command.args[-1]
 
 
 def test_launcher_falls_back_to_direct_runner_when_cmux_disabled(tmp_path: Path) -> None:
@@ -259,6 +327,28 @@ def test_run_loop_dry_run_resolves_conflicting_executor_labels_deterministically
     # Then: documented conflict precedence selects OmX deterministically.
     assert result.loop.executor == "omx"
     assert result.worker_command.args[0:3] == ("omx", "exec", "--full-auto")
+
+
+def test_run_loop_dry_run_resolves_omo_executor_from_issue_label(tmp_path: Path) -> None:
+    # Given: the selected issue explicitly requests the OmO executor.
+    command_runner = RecordingCommandRunner([CommandResult(stdout="", stderr="", returncode=0)])
+    issue = GitHubIssue(number=12, title="Run with OmO", body="Use OmO", labels=["ai:ready", "executor:omo"])
+    github = ReadyIssueClient(issue)
+    store = StateStore(tmp_path / "state.db")
+    service = RunLoopService(
+        workspace=Workspace(tmp_path / "workspace", command_runner),
+        store=store,
+        worker=CodexWorkerLauncher(),
+        github_factory=lambda repo: github,
+    )
+
+    # When: the loop selects that issue.
+    result = service.run_once(repo_raw="owner/repo", dry_run=True)
+
+    # Then: OmO is resolved as a worker engine for a cmux surface.
+    assert result is not None
+    assert result.loop.executor == "omo"
+    assert result.worker_command.args[0:3] == ("omo", "exec", "--full-auto")
 
 
 class ReadyIssueClient:

@@ -8,6 +8,7 @@ from typing import Any, Final
 from .godmode import GodmodeAuthorizationError, GodmodeConfig, GodmodeContext, GodmodeResult, GodmodeService, parse_godmode_command
 from .intake import IntakeResult, IntakeService
 from .loop_runner import RunLoopResult, RunLoopService
+from .worker import WorkerLaunchContext
 
 JsonValue = Any
 
@@ -78,6 +79,9 @@ class DiscordAutomationService:
         channel_id: str | None = None,
         thread_id: str | None = None,
         sender_id: str | None = None,
+        guild_id: str | None = None,
+        channel_name: str | None = None,
+        thread_name: str | None = None,
     ) -> DiscordAutomationResult:
         godmode_action = parse_godmode_command(raw_message)
         if godmode_action is not None:
@@ -95,6 +99,9 @@ class DiscordAutomationService:
                         channel_id=channel_id,
                         thread_id=thread_id,
                         sender_id=sender_id,
+                        guild_id=guild_id,
+                        channel_name=channel_name,
+                        thread_name=thread_name,
                     ),
                 )
             except GodmodeAuthorizationError as exc:
@@ -117,7 +124,23 @@ class DiscordAutomationService:
             return DiscordAutomationResult(request=request, intake=None, loop=None, dry_run=True)
 
         intake_result = self.intake.create_task(repo_raw=request.repo_raw, request_text=request.request_text)
-        loop_result = self.loop_runner.run_once(repo_raw=request.repo_raw, dry_run=False) if run_loop else None
+        loop_result = (
+            self.loop_runner.run_once(
+                repo_raw=request.repo_raw,
+                dry_run=False,
+                launch_context=WorkerLaunchContext(
+                    platform="discord",
+                    guild_id=guild_id,
+                    channel_id=channel_id,
+                    channel_name=channel_name,
+                    thread_id=thread_id,
+                    thread_name=thread_name,
+                    conversation_id=f"discord:{thread_id or channel_id or sender_id or 'unknown'}",
+                ),
+            )
+            if run_loop
+            else None
+        )
         return DiscordAutomationResult(request=request, intake=intake_result, loop=loop_result, dry_run=False)
 
 

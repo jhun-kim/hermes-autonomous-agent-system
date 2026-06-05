@@ -6,6 +6,7 @@ from typing import Any, Final, Literal
 
 from .loop_runner import RunLoopService
 from .models import GodmodeSession, utc_now_iso
+from .worker import WorkerLaunchContext
 
 GodmodeAction = Literal["start", "status", "pause", "resume", "stop"]
 GodmodeStatus = Literal["running", "paused", "stopped", "completed", "failed"]
@@ -31,8 +32,8 @@ class GodmodeConfig:
     seed_issue_title: str = "GODMODE follow-up task"
     seed_issue_body: str = (
         "GODMODE could not find an ai:ready issue. Inspect the repository, identify the next "
-        "concrete improvement, implement it with the issue-first OmO/OmX ULW workflow, and "
-        "create another follow-up issue if more work remains."
+        "concrete improvement, implement it with the issue-first cmux workspace/surface workflow "
+        "using Codex/OmX/OmO workers inside cmux surfaces, and create another follow-up issue if more work remains."
     )
     seed_issue_labels: tuple[str, ...] = ("ai:ready", "executor:lazycodex", "priority:p2")
 
@@ -50,6 +51,9 @@ class GodmodeContext:
     channel_id: str | None = None
     thread_id: str | None = None
     sender_id: str | None = None
+    guild_id: str | None = None
+    channel_name: str | None = None
+    thread_name: str | None = None
 
 
 def parse_godmode_command(raw_message: str) -> GodmodeAction | None:
@@ -83,14 +87,14 @@ class GodmodeService:
         match action:
             case "start":
                 session = self._start_or_restart(current=current, context=context)
-                return GodmodeResult(session=self._run_until_guardrail(session), action=action)
+                return GodmodeResult(session=self._run_until_guardrail(session, context=context), action=action)
             case "status":
                 return GodmodeResult(session=current or self._new_session(context=context, status="stopped"), action=action)
             case "pause":
                 return GodmodeResult(session=self._persist_control(current=current, context=context, status="paused"), action=action)
             case "resume":
                 resumed = self._persist_control(current=current, context=context, status="running")
-                return GodmodeResult(session=self._run_until_guardrail(resumed), action=action)
+                return GodmodeResult(session=self._run_until_guardrail(resumed, context=context), action=action)
             case "stop":
                 return GodmodeResult(
                     session=self._persist_control(current=current, context=context, status="stopped", stop_reason="user_stop"),
@@ -118,7 +122,7 @@ class GodmodeService:
         self.loop_runner.store.save_godmode_session(session)
         return session
 
-    def _run_until_guardrail(self, session: GodmodeSession) -> GodmodeSession:
+    def _run_until_guardrail(self, session: GodmodeSession, *, context: GodmodeContext) -> GodmodeSession:
         active = session
         while active.status == "running":
             guardrail = self._guardrail_reason(active)
@@ -126,7 +130,11 @@ class GodmodeService:
                 return self._stop(active, status="completed" if guardrail == "max_iterations" else "stopped", reason=guardrail)
             created_issue = self._create_seed_issue_if_configured(active)
             try:
-                result = self.loop_runner.run_once(repo_raw=active.repo, dry_run=False)
+                result = self.loop_runner.run_once(
+                    repo_raw=active.repo,
+                    dry_run=False,
+                    launch_context=_worker_launch_context_from_godmode(context),
+                )
             except RuntimeError as exc:
                 return self._record_failure(active, str(exc))
             if result is None:
@@ -239,6 +247,18 @@ def _is_authorized_id(value: str | None, allowed: frozenset[str]) -> bool:
 
 def _parse_iso(value: str) -> datetime:
     return datetime.fromisoformat(value).astimezone(timezone.utc)
+
+
+def _worker_launch_context_from_godmode(context: GodmodeContext) -> WorkerLaunchContext:
+    return WorkerLaunchContext(
+        platform="discord",
+        guild_id=context.guild_id,
+        channel_id=context.channel_id,
+        channel_name=context.channel_name,
+        thread_id=context.thread_id,
+        thread_name=context.thread_name,
+        conversation_id=context.conversation_id,
+    )
 
 
 class GodmodeAuthorizationError(ValueError):
