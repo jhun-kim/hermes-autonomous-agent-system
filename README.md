@@ -89,6 +89,39 @@ cloning repos, writing real loop state, or launching Codex/OmX workers:
 python3 -m pytest -q tests/test_gateway_wrapper_live_fixture.py
 ```
 
+#### Hermes context-compression runtime hook
+
+`hermes-context-compression-hook` accepts the JSON shape produced by a live
+Hermes compression lifecycle boundary after `_compress_context` rotates from an
+old session id to a new one. It is disabled by default; production runtimes must
+explicitly opt in:
+
+```bash
+export HERMES_CONTEXT_COMPACTION_DISPATCH_ENABLED=true
+```
+
+The hook reads JSON from `--event-json` or stdin and routes Discord compression
+records through the same hasystem `context.compaction` gateway seam used by the
+rollover adapter. Non-Discord sessions and disabled/default runs are explicit
+no-ops.
+
+Low-threshold smoke for a real runtime-shaped lifecycle event:
+
+```bash
+PYTHONPATH=src HERMES_CONTEXT_COMPACTION_DISPATCH_ENABLED=true \
+  python3 -m hasystem.commands.context_compression_hook \
+  --compaction-rollover-threshold 1 \
+  --event-json '{
+    "platform": "discord",
+    "discord": {"guild_id": "guild", "channel_id": "channel", "thread_id": "thread"},
+    "session": {"old_id": "old-session", "new_id": "new-session"},
+    "repository": "jhun-kim/hermes-autonomous-agent-system",
+    "latest_goal": "continue the active issue",
+    "active_issue": {"number": 25, "title": "Connect live hook", "labels": ["ai:in-progress"]},
+    "compression": {"summary": "compressed transcript summary", "handoff_context": "runtime hook handoff"}
+  }'
+```
+
 #### Real gateway deployment checklist
 
 Use this checklist before pointing a production Hermes Discord gateway at

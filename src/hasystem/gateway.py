@@ -45,8 +45,11 @@ class DiscordGatewayEvent:
     sender_display_name: str | None = None
     repo_hint: str | None = None
     session_id: str | None = None
+    new_session_id: str | None = None
     latest_user_goal: str | None = None
     session_summary: str | None = None
+    compression_summary: str | None = None
+    handoff_context: str | None = None
     active_issue_number: int | None = None
     active_issue_title: str | None = None
     active_issue_labels: list[str] = field(default_factory=list)
@@ -85,8 +88,11 @@ class DiscordGatewayEvent:
             ),
             repo_hint=_optional_str(data.get("repo")) or _optional_str(data.get("repository")) or _optional_str(data.get("repo_hint")),
             session_id=_optional_str(data.get("session_id")) or _optional_str(data.get("conversation_id")),
+            new_session_id=_optional_str(data.get("new_session_id")),
             latest_user_goal=_optional_str(data.get("latest_user_goal")),
             session_summary=_optional_str(data.get("session_summary")) or _optional_str(data.get("summary")),
+            compression_summary=_optional_str(data.get("compression_summary")),
+            handoff_context=_optional_str(data.get("handoff_context")),
             active_issue_number=_optional_int(data.get("active_issue_number")),
             active_issue_title=_optional_str(data.get("active_issue_title")),
             active_issue_labels=_string_list(data.get("active_issue_labels")),
@@ -105,7 +111,7 @@ class DiscordGatewayEvent:
         return json.dumps({"repo": self.repo_hint, "request": self.raw_message})
 
     def conversation_id(self) -> str:
-        stable_id = self.session_id or self.thread_id or self.channel_id or self.sender_id or "unknown"
+        stable_id = self.thread_id or self.channel_id or self.sender_id or self.session_id or "unknown"
         return f"{self.platform}:{stable_id}"
 
 
