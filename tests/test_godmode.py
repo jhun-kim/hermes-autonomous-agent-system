@@ -83,7 +83,9 @@ def test_godmode_starts_selects_issue_marks_in_progress_and_records_evidence(tmp
     assert payload["godmode"]["stop_reason"] == "max_iterations"
     assert payload["godmode"]["evidence"][0]["issue"]["number"] == 12
     assert github.marked == [12]
-    assert runner.commands[-1][0:2] == ("osascript", "-e")
+    assert runner.commands[-1] == ("codex", ".")
+    assert runner.stdin_values[-1] is not None
+    assert "issue-first agent workflow" in runner.stdin_values[-1]
     stored = service.loop_runner.store.get_godmode_session("discord:channel-1")
     assert stored is not None
     assert stored.status == "completed"

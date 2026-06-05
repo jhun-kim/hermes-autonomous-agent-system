@@ -256,10 +256,11 @@ def test_discord_automation_intakes_issue_and_launches_worker(tmp_path: Path) ->
     assert result.loop.worker_command.args == ("codex", ".")
     assert runner.commands[0][:2] == ("git", "clone")
     assert ("gh", "issue", "edit", "42", "--repo", "owner/repo", "--add-label", "ai:in-progress", "--remove-label", "ai:ready") in runner.commands
-    assert runner.commands[-1][0:2] == ("osascript", "-e")
-    assert "codex ." in runner.commands[-1][-1]
+    assert runner.commands[-1] == ("codex", ".")
     assert result.loop.worker_command.stdin_text is not None
-    assert "OmO/OmX workflow" in result.loop.worker_command.stdin_text
+    assert runner.stdin_values[-1] == result.loop.worker_command.stdin_text
+    assert "issue-first agent workflow" in result.loop.worker_command.stdin_text
+    assert "do not use OmO/OmX as the terminal/session orchestration mechanism" in result.loop.worker_command.stdin_text
 
 
 def test_discord_automation_dry_run_only_parses_message(tmp_path: Path) -> None:
