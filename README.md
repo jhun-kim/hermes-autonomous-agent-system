@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/jhun-kim/hermes-autonomous-agent-system/actions/workflows/ci.yml/badge.svg)](https://github.com/jhun-kim/hermes-autonomous-agent-system/actions/workflows/ci.yml)
 
-MVP orchestrator for a human-governed Hermes + GitHub + Discord + LazyCodex/OMX workflow.
+MVP orchestrator for a human-governed Hermes + GitHub + Discord + cmux workspace/surface workflow, with LazyCodex/OMX used only as worker engines inside cmux-managed surfaces.
 
 Current scope:
 
@@ -11,10 +11,20 @@ Current scope:
 3. Ensure automation labels: `ai:ready`, `executor:lazycodex`, `priority:p2`, `ai:in-progress`, `ai:blocked`, `ai:done`.
 4. Create `ai:ready` issues from Discord/Hermes task text.
 5. Accept a raw Discord/Gateway message, JSON payload, or natural-language request with repo aliases/default repo context and orchestrate intake + run-loop with one command.
-6. Select eligible `ai:ready` issues, store the active loop in SQLite, and prepare a `codex .` worker command in the target repo.
+6. Select eligible `ai:ready` issues, store the active loop in SQLite, and prepare a worker command for a cmux-managed workspace/surface in the target repo.
 7. Finalize by planning or running branch push, PR creation, issue comment, and label transition.
 
-External commands go through a subprocess runner abstraction so tests can fake `git`, `gh`, and `codex`.
+External commands go through a subprocess runner abstraction so tests can fake `git`, `gh`, `codex`, and `cmux`.
+
+## Worker surfaces: cmux first
+
+Repository coding work is orchestrated through [cmux](https://github.com/manaflow-ai/cmux) workspace and surface primitives when cmux is installed:
+
+- If the runtime is already inside cmux, `CMUX_WORKSPACE_ID` is the default target. The launcher creates an additional terminal surface in that caller workspace and sends the worker command there.
+- If no caller workspace is available, the launcher creates one cmux workspace rooted at the target repository with `cmux new-workspace --cwd <repo> --command <worker> --focus false`.
+- Worker launches are additive and focus-neutral. Do not select other workspaces, focus panes, or open unbounded Terminal.app windows for parallel coding work.
+- `executor:lazycodex` and `executor:omx` still select the worker engine/prompt shape. They do not select the terminal/session manager; cmux owns that layer.
+- Headless CI/tests can disable cmux preference or run dry-run mode to avoid live cmux socket access.
 
 ## Operating rule: issue first, code second
 
@@ -149,9 +159,9 @@ Use this checklist before pointing a production Hermes Discord gateway at
    `allow_repos` or pass explicit `--allow-repo owner/repo` entries; do not use
    `--allow-any-repo` by default.
 5. Restart only at runtime boundaries: use `/restart` or restart the gateway
-   process after changing the installed wrapper/adapter, OmX/OmO worker runtime,
-   environment variables, or router config file path. Ordinary new Discord
-   requests in an already configured runtime do not require restart.
+   process after changing the installed wrapper/adapter, cmux worker-surface
+   runtime, environment variables, or router config file path. Ordinary new
+   Discord requests in an already configured runtime do not require restart.
 6. Keep a rollback note with the previous wrapper path, router config path, and
    adapter version so rollback is a config/path revert plus the same restart
    boundary from step 5.

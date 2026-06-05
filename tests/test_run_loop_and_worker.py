@@ -24,8 +24,9 @@ def test_codex_worker_launcher_builds_target_repo_command(tmp_path: Path) -> Non
     assert "GitHub repo: owner/repo" in command.stdin_text
     assert "Issue #7: Implement parser" in command.stdin_text
     assert "Labels: ai:ready" in command.stdin_text
-    assert "OmO/OmX workflow" in command.stdin_text
-    assert "ulw skill/workflow" in command.stdin_text
+    assert "issue-first agent workflow" in command.stdin_text
+    assert "ULW as the optional execution discipline" in command.stdin_text
+    assert "do not use OmO/OmX as the terminal/session orchestration mechanism" in command.stdin_text
     assert "issue first, code second" in command.stdin_text
     assert "confirm the selected GitHub issue" in command.stdin_text
 
@@ -46,7 +47,60 @@ def test_omx_worker_launcher_builds_non_interactive_exec_command(tmp_path: Path)
     assert "Issue #6: Add OmX exec mode" in command.args[-1]
     assert "Labels: ai:ready, executor:omx" in command.args[-1]
     assert "issue first, code second" in command.args[-1]
-    assert "ulw skill/workflow" in command.args[-1]
+    assert "ULW as the optional execution discipline" in command.args[-1]
+    assert "do not use OmO/OmX as the terminal/session orchestration mechanism" in command.args[-1]
+
+
+def test_cmux_launcher_uses_current_workspace_surface_without_focus_switch(tmp_path: Path) -> None:
+    # Given: an active cmux caller workspace and a worker command.
+    launcher = CodexWorkerLauncher(cmux_binary="cmux")
+    issue = GitHubIssue(number=39, title="Use cmux", body="Launch through cmux", labels=["ai:ready"])
+    worker_command = launcher.build(repo_path=tmp_path, repo="owner/repo", issue=issue, branch="ai/issue-39-use-cmux")
+
+    # When: building the cmux launch command with a caller workspace.
+    cmux_command = launcher.build_cmux_command(worker_command, env={"CMUX_WORKSPACE_ID": "workspace:1"})
+
+    # Then: a new surface is added to the caller workspace without selecting/focusing another workspace.
+    assert cmux_command.args[0:2] == ("/bin/sh", "-lc")
+    script = cmux_command.args[-1]
+    assert "cmux --json new-surface --workspace workspace:1 --type terminal --focus false" in script
+    assert "cmux send --surface" in script
+    assert "codex ." in script
+    assert "select-workspace" not in script
+    assert "focus-pane" not in script
+    assert "focus-panel" not in script
+
+
+def test_cmux_launcher_creates_workspace_when_no_caller_workspace(tmp_path: Path) -> None:
+    # Given: a worker command outside an existing cmux caller workspace.
+    launcher = CodexWorkerLauncher(cmux_binary="cmux")
+    issue = GitHubIssue(number=39, title="Use cmux", body="Launch through cmux", labels=["ai:ready"])
+    worker_command = launcher.build(repo_path=tmp_path, repo="owner/repo", issue=issue, branch="ai/issue-39-use-cmux")
+
+    # When: building the cmux launch command without cmux environment anchors.
+    cmux_command = launcher.build_cmux_command(worker_command, env={})
+
+    # Then: cmux opens one new workspace rooted at the target repository instead of Terminal.app.
+    assert cmux_command.args[0:2] == ("cmux", "new-workspace")
+    assert "--cwd" in cmux_command.args
+    assert str(tmp_path) in cmux_command.args
+    assert "--command" in cmux_command.args
+    assert "--focus" in cmux_command.args
+    assert "false" in cmux_command.args
+
+
+def test_launcher_falls_back_to_direct_runner_when_cmux_disabled(tmp_path: Path) -> None:
+    # Given: cmux preference is disabled for a headless/test launch.
+    runner = RecordingCommandRunner([CommandResult(stdout="", stderr="", returncode=0)])
+    launcher = CodexWorkerLauncher(runner=runner, prefer_cmux=False)
+    issue = GitHubIssue(number=39, title="Use cmux", body="Launch through cmux", labels=["ai:ready"])
+    worker_command = launcher.build(repo_path=tmp_path, repo="owner/repo", issue=issue, branch="ai/issue-39-use-cmux")
+
+    # When: launching with the explicit legacy/fallback path.
+    launcher.launch(worker_command)
+
+    # Then: the fallback is still available, but cmux-preferred launches do not use it.
+    assert runner.commands == [("osascript", "-e", launcher.build_terminal_command(worker_command).args[-1])]
 
 
 def test_run_loop_dry_run_ignores_executor_argument_and_uses_issue_label(tmp_path: Path) -> None:

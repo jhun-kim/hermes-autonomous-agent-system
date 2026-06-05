@@ -20,6 +20,12 @@ Exceptions:
 - Emergency cleanup of accidental local artifacts may be done before issue creation.
 - If GitHub issue creation is unavailable, stop and report the blocker instead of silently editing code.
 
-## OmO/OmX worker workflow
+## cmux worker workspace/surface workflow
 
-When launching or instructing Codex/OmX workers for repository coding tasks, require the worker to use the OmO/OmX workflow and specifically the ulw skill/workflow.
+When launching or instructing coding workers for repository tasks, use cmux as the session manager:
+
+1. Prefer the caller/current cmux workspace (`CMUX_WORKSPACE_ID`) when present.
+2. Add terminal surfaces/panes for parallel workers; do not open unbounded Terminal.app windows.
+3. Keep layout changes additive and focus-neutral (`--focus false` where supported).
+4. If no caller workspace exists, create one cmux workspace rooted at the target repository.
+5. LazyCodex/OmX/ULW may remain worker-engine or execution-discipline standards, but they must not replace cmux as the workspace/surface orchestration layer.
