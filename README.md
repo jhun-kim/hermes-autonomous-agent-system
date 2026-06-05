@@ -89,6 +89,30 @@ cloning repos, writing real loop state, or launching Codex/OmX workers:
 python3 -m pytest -q tests/test_gateway_wrapper_live_fixture.py
 ```
 
+#### Real gateway deployment checklist
+
+Use this checklist before pointing a production Hermes Discord gateway at
+`scripts/hermes-gateway-wrapper` or an adapted copy:
+
+1. Copy the wrapper beside the gateway runtime, or keep this repository checkout
+   as a read-only deployment dependency, and set the wrapper's `--config` path to
+   the deployed router JSON location rather than a developer-local path.
+2. Validate channel/thread routing in dry-run mode with
+   `examples/hermes-gateway-event.dry-run.json`; confirm the selected `repo`,
+   `status`, and `hints` are what the gateway should report to Discord.
+3. Run the isolated live-mode fixture before enabling live Discord events:
+   `python3 -m pytest -q tests/test_gateway_wrapper_live_fixture.py`.
+4. Review the fail-closed repository boundary. Keep production repos in
+   `allow_repos` or pass explicit `--allow-repo owner/repo` entries; do not use
+   `--allow-any-repo` by default.
+5. Restart only at runtime boundaries: use `/restart` or restart the gateway
+   process after changing the installed wrapper/adapter, OmX/OmO worker runtime,
+   environment variables, or router config file path. Ordinary new Discord
+   requests in an already configured runtime do not require restart.
+6. Keep a rollback note with the previous wrapper path, router config path, and
+   adapter version so rollback is a config/path revert plus the same restart
+   boundary from step 5.
+
 ### Gateway adapter for real Discord/Hermes wiring
 
 For a production Hermes Discord/Gateway tool wrapper, prefer the structured
