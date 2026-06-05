@@ -202,6 +202,9 @@ def build_gateway_response(
         channel_id=event.channel_id,
         thread_id=event.thread_id,
         sender_id=event.sender_id,
+        guild_id=event.guild_id,
+        channel_name=event.channel_name,
+        thread_name=event.thread_name,
     )
     return _automation_result_payload(result=result, event=event, no_run_loop=no_run_loop)
 
@@ -227,6 +230,9 @@ def _godmode_payload(*, service: DiscordAutomationService, event: DiscordGateway
                 channel_id=event.channel_id,
                 thread_id=event.thread_id,
                 sender_id=event.sender_id,
+                guild_id=event.guild_id,
+                channel_name=event.channel_name,
+                thread_name=event.thread_name,
             ),
         )
     except GodmodeAuthorizationError as exc:

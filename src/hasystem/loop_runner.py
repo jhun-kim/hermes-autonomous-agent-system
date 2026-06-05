@@ -8,7 +8,7 @@ from .github_client import GitHubClient
 from .models import LoopState
 from .repo_spec import RepoSpec
 from .state_store import StateStore
-from .worker import CodexWorkerLauncher, WorkerExecutor
+from .worker import CodexWorkerLauncher, WorkerExecutor, WorkerLaunchContext
 from .workspace import Workspace
 
 
@@ -26,7 +26,13 @@ class RunLoopService:
     worker: CodexWorkerLauncher
     github_factory: Callable[[str], GitHubClient] = GitHubClient
 
-    def run_once(self, repo_raw: str, dry_run: bool, executor: WorkerExecutor = "lazycodex") -> RunLoopResult | None:
+    def run_once(
+        self,
+        repo_raw: str,
+        dry_run: bool,
+        executor: WorkerExecutor = "lazycodex",
+        launch_context: WorkerLaunchContext | None = None,
+    ) -> RunLoopResult | None:
         _ = executor
         repo = RepoSpec.parse(repo_raw)
         active = self.store.get_active_loop(repo.full_name)
@@ -53,7 +59,7 @@ class RunLoopService:
         if not dry_run:
             self.store.save_loop(loop)
             client.mark_in_progress(issue.number)
-            self.worker.launch(command)
+            self.worker.launch(command, launch_context=launch_context, repo=repo.full_name)
         return RunLoopResult(loop=loop, worker_command=command, existing_active=False)
 
 
@@ -61,10 +67,13 @@ def resolve_worker_executor(labels: list[str]) -> WorkerExecutor:
     """Resolve worker executor labels with deterministic conflict precedence.
 
     OmX is the explicit non-default executor, so `executor:omx` wins when both
-    executor labels are present. `executor:lazycodex` and no executor label both
+    executor labels are present. `executor:omo` selects OmO when OmX is not
+    requested. `executor:lazycodex`, `executor:codex`, and no executor label all
     resolve to the LazyCodex/Codex default.
     """
     label_set = set(labels)
     if "executor:omx" in label_set:
         return "omx"
+    if "executor:omo" in label_set:
+        return "omo"
     return "lazycodex"

@@ -25,7 +25,9 @@ Exceptions:
 When launching or instructing coding workers for repository tasks, use cmux as the session manager:
 
 1. Prefer the caller/current cmux workspace (`CMUX_WORKSPACE_ID`) when present.
-2. Add terminal surfaces/panes for parallel workers; do not open unbounded Terminal.app windows.
-3. Keep layout changes additive and focus-neutral (`--focus false` where supported).
-4. If no caller workspace exists, create one cmux workspace rooted at the target repository.
-5. LazyCodex/OmX/ULW may remain worker-engine or execution-discipline standards, but they must not replace cmux as the workspace/surface orchestration layer.
+2. For Discord-originated work, treat the Discord thread as the cmux workspace boundary. Derive one deterministic workspace name from the Discord thread/channel context and keep all work for that thread in that workspace.
+3. Add terminal surfaces/panes inside that workspace for parallel workers; do not open unbounded Terminal.app windows or unrelated cmux workspaces.
+4. Run Codex, OmX, and OmO as worker engines inside those cmux surfaces. Choose engines by issue labels or decomposition needs, but keep cmux as the workspace/surface orchestration layer.
+5. Keep layout changes additive and focus-neutral (`--focus false` where supported).
+6. If no Discord/caller workspace exists, create one cmux workspace rooted at the target repository.
+7. LazyCodex/OmX/OmO/ULW may remain worker-engine or execution-discipline standards, but they must not replace cmux as the workspace/surface orchestration layer.
