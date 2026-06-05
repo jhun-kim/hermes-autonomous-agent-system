@@ -80,6 +80,15 @@ therefore stays fail-closed: the selected repository must appear in
 an explicit `--allow-repo owner/repo` adapter argument. Use `--allow-any-repo`
 only for a trusted private gateway after reviewing the routing boundary.
 
+Before deploying the wrapper in a real Hermes Discord gateway, run the isolated
+live-mode fixture. It replaces the installed adapter with a fake executable, so
+it verifies wrapper `--live` allow-list behavior without touching GitHub,
+cloning repos, writing real loop state, or launching Codex/OmX workers:
+
+```bash
+python3 -m pytest -q tests/test_gateway_wrapper_live_fixture.py
+```
+
 ### Gateway adapter for real Discord/Hermes wiring
 
 For a production Hermes Discord/Gateway tool wrapper, prefer the structured
