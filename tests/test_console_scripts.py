@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from configparser import ConfigParser
+import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 from typing import NoReturn
@@ -85,6 +87,97 @@ def test_gateway_adapter_module_accepts_event_json_and_prints_structured_dry_run
     assert payload["repo"] == "owner/repo"
     assert payload["parsed_request"]["request_text"] == "implement gateway adapter"
     assert not state_db.exists()
+
+
+def test_packaged_gateway_adapter_console_script_dry_run_does_not_mutate_paths(tmp_path: Path) -> None:
+    # Given: the current project is installed into an isolated virtual environment.
+    venv_source_python = _packaging_test_python()
+    venv_path = tmp_path / "venv"
+    package_source = tmp_path / "package-source"
+    package_source.mkdir()
+    shutil.copy2(Path("pyproject.toml"), package_source / "pyproject.toml")
+    shutil.copytree(Path("src"), package_source / "src")
+    create_venv = subprocess.run(
+        [venv_source_python, "-m", "venv", str(venv_path)],
+        cwd=Path.cwd(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert create_venv.returncode == 0, create_venv.stderr
+
+    python_bin = venv_path / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    script_bin = venv_path / ("Scripts/hermes-gateway-adapter.exe" if os.name == "nt" else "bin/hermes-gateway-adapter")
+    install_env = os.environ.copy()
+    install_env["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
+    install_env["PIP_NO_CACHE_DIR"] = "1"
+    install = subprocess.run(
+        [
+            str(python_bin),
+            "-m",
+            "pip",
+            "install",
+            "--no-deps",
+            "--no-build-isolation",
+            ".",
+        ],
+        cwd=package_source,
+        env=install_env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert install.returncode == 0, install.stderr
+
+    state_db = tmp_path / "state.db"
+    workspace = tmp_path / "workspace"
+    event = json.dumps(
+        {
+            "platform": "discord",
+            "channel_id": "channel-1",
+            "content": "Hermes, hasystem implement packaged gateway adapter smoke test",
+            "dry_run": True,
+        }
+    )
+
+    # When: the installed console script handles the event in dry-run mode.
+    result = subprocess.run(
+        [
+            str(script_bin),
+            "--event-json",
+            event,
+            "--repo-alias",
+            "hasystem=owner/repo",
+            "--state-db",
+            str(state_db),
+            "--workspace",
+            str(workspace),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    # Then: the packaged executable prints structured dry-run JSON without mutating state or workspace paths.
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "dry_run"
+    assert payload["repo"] == "owner/repo"
+    assert payload["parsed_request"]["request_text"] == "implement packaged gateway adapter smoke test"
+    assert payload["intake"] is None
+    assert payload["loop"] is None
+    assert not state_db.exists()
+    assert not workspace.exists()
+
+
+def _packaging_test_python() -> str:
+    if sys.version_info >= (3, 10):
+        return sys.executable
+    python_311 = shutil.which("python3.11")
+    if python_311 is None:
+        pytest.skip("packaged console-script smoke test requires Python >=3.10 or python3.11 on PATH")
+    return python_311
 
 
 def test_gateway_adapter_non_dry_run_requires_allow_repo_before_state_write(tmp_path: Path) -> None:
