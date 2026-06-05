@@ -146,6 +146,17 @@ def test_load_router_config_from_json_file_and_cli_overrides(tmp_path: Path) -> 
                 "allow_repos": ["owner/from-cli", "owner/thread-cli"],
                 "default_repo": "owner/default-config",
                 "compaction_rollover_threshold": 3,
+                "godmode": {
+                    "authorized_channel_ids": ["thread-1"],
+                    "authorized_sender_ids": ["user-1"],
+                    "max_iterations": 2,
+                    "max_runtime_seconds": 60,
+                    "max_failures": 2,
+                    "create_issue_when_empty": True,
+                    "seed_issue_title": "Seed next GODMODE task",
+                    "seed_issue_body": "Find the next concrete task.",
+                    "seed_issue_labels": ["ai:ready", "executor:omx", "priority:p2"],
+                },
             }
         ),
         encoding="utf-8",
@@ -164,6 +175,15 @@ def test_load_router_config_from_json_file_and_cli_overrides(tmp_path: Path) -> 
     assert config.default_repo == "owner/default-config"
     assert config.allow_repos == frozenset({"owner/from-cli", "owner/thread-cli"})
     assert config.compaction_rollover_threshold == 3
+    assert config.godmode.authorized_channel_ids == frozenset({"thread-1"})
+    assert config.godmode.authorized_sender_ids == frozenset({"user-1"})
+    assert config.godmode.max_iterations == 2
+    assert config.godmode.max_runtime_seconds == 60
+    assert config.godmode.max_failures == 2
+    assert config.godmode.create_issue_when_empty is True
+    assert config.godmode.seed_issue_title == "Seed next GODMODE task"
+    assert config.godmode.seed_issue_body == "Find the next concrete task."
+    assert config.godmode.seed_issue_labels == ("ai:ready", "executor:omx", "priority:p2")
 
 
 def test_parse_discord_request_rejects_repos_not_in_allowlist() -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import uuid
 from dataclasses import dataclass, field
+from typing import Any
 from datetime import datetime, timezone
 
 
@@ -73,6 +74,21 @@ class LoopState:
             created_at=self.created_at,
             updated_at=self.updated_at,
         )
+
+
+@dataclass(frozen=True)
+class GodmodeSession:
+    conversation_id: str
+    repo: str
+    status: str
+    iterations: int = 0
+    failures: int = 0
+    last_issue_number: int | None = None
+    last_issue_title: str | None = None
+    stop_reason: str | None = None
+    evidence: list[dict[str, Any]] = field(default_factory=list)
+    started_at: str = field(default_factory=utc_now_iso)
+    updated_at: str = field(default_factory=utc_now_iso)
 
 
 @dataclass(frozen=True)

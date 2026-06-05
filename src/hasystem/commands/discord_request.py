@@ -41,6 +41,7 @@ def main() -> int:
     )
     parser.add_argument("--channel-id", help="Discord channel ID used to resolve --channel-default-repo")
     parser.add_argument("--thread-id", help="Discord thread ID used to resolve --channel-default-repo before channel ID")
+    parser.add_argument("--sender-id", help="Discord sender ID used for godmode authorization")
     args = parser.parse_args()
 
     try:
@@ -83,6 +84,7 @@ def main() -> int:
             run_loop=not args.no_run_loop,
             channel_id=args.channel_id,
             thread_id=args.thread_id,
+            sender_id=args.sender_id,
         )
     except DiscordRequestParseError as exc:
         print(f"Parse error: {exc}")
@@ -90,6 +92,10 @@ def main() -> int:
 
     print(f"Repo: {result.request.repo_raw}")
     print(f"Request: {result.request.request_text}")
+    if result.godmode is not None:
+        print(f"Godmode: {result.godmode.session.status}")
+        print(f"Iterations: {result.godmode.session.iterations}")
+        print(f"Stop reason: {result.godmode.session.stop_reason}")
     if result.intake is not None:
         print(f"Local path: {result.intake.local_path}")
         print(f"Issue: #{result.intake.issue_number}")
