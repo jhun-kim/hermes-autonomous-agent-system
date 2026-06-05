@@ -5,6 +5,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .gateway_parsing import (
+    event_message as _event_message,
+    event_payload as _event_payload,
+    event_type_is_context_compaction as _event_type_is_context_compaction,
+    json_object as _json_object,
+    load_config_file as _load_config_file,
+    normalized_mapping as _normalized_mapping,
+    optional_bool as _optional_bool,
+    optional_int as _optional_int,
+    optional_str as _optional_str,
+    string_list as _string_list,
+    string_mapping as _string_mapping,
+)
+
 from .discord_request import (
     DiscordAutomationResult,
     DiscordAutomationService,
@@ -37,6 +51,7 @@ class DiscordGatewayEvent:
     active_issue_title: str | None = None
     active_issue_labels: list[str] = field(default_factory=list)
     context_compaction: bool = False
+    event_type: str | None = None
     dry_run: bool = False
     no_run_loop: bool = False
 
@@ -54,6 +69,7 @@ class DiscordGatewayEvent:
     def from_mapping(cls, data: dict[str, JsonValue]) -> "DiscordGatewayEvent":
         message = _event_message(data)
         sender = _json_object(data.get("sender")) or _json_object(data.get("author")) or {}
+        event_type = _optional_str(data.get("event_type")) or _optional_str(data.get("type"))
         return cls(
             raw_message=message,
             platform=_optional_str(data.get("platform")) or "discord",
@@ -76,8 +92,9 @@ class DiscordGatewayEvent:
             active_issue_labels=_string_list(data.get("active_issue_labels")),
             context_compaction=(
                 _optional_bool(data.get("context_compaction"))
-                or _event_type_is_context_compaction(_optional_str(data.get("event_type")) or _optional_str(data.get("type")))
+                or _event_type_is_context_compaction(event_type)
             ),
+            event_type=event_type,
             dry_run=_optional_bool(data.get("dry_run")) or False,
             no_run_loop=_optional_bool(data.get("no_run_loop")) or False,
         )
@@ -217,17 +234,6 @@ def _automation_result_payload(
     return payload
 
 
-def _event_payload(event: DiscordGatewayEvent) -> JsonObject:
-    return {
-        "guild_id": event.guild_id,
-        "channel_id": event.channel_id,
-        "thread_id": event.thread_id,
-        "sender_id": event.sender_id,
-        "sender_display_name": event.sender_display_name,
-        "session_id": event.session_id,
-    }
-
-
 def _intake_payload(result: IntakeResult | None) -> JsonObject | None:
     if result is None:
         return None
@@ -263,86 +269,3 @@ def _hints_payload(*, result: DiscordAutomationResult, no_run_loop: bool) -> Jso
     if result.loop is None:
         return {"next_action": "No ai:ready issue was selected; review labels or run intake-only mode."}
     return {"next_action": "Watch the worker session; finalize requires approval before PR/label changes."}
-
-
-def _load_config_file(path: Path) -> JsonObject:
-    text = path.read_text(encoding="utf-8")
-    if path.suffix.lower() in {".yaml", ".yml"}:
-        try:
-            import yaml  # type: ignore[import-untyped]
-        except ImportError as exc:
-            raise DiscordRequestParseError("YAML config requires PyYAML; use JSON config in this environment") from exc
-        loaded = yaml.safe_load(text)
-    else:
-        try:
-            loaded = json.loads(text)
-        except json.JSONDecodeError as exc:
-            raise DiscordRequestParseError(f"Router config JSON is invalid: {exc.msg}") from exc
-    if not isinstance(loaded, dict):
-        raise DiscordRequestParseError("Router config must be a JSON/YAML object")
-    return loaded
-
-
-def _event_message(data: dict[str, JsonValue]) -> str:
-    nested = _json_object(data.get("message"))
-    message = (
-        _optional_str(data.get("raw_message"))
-        or _optional_str(data.get("content"))
-        or _optional_str(data.get("text"))
-        or _optional_str(data.get("request"))
-        or (_optional_str(nested.get("content")) if nested else None)
-        or (_optional_str(nested.get("text")) if nested else None)
-    )
-    if not message:
-        raise DiscordRequestParseError("Gateway event needs message.content, content, text, request, or raw_message")
-    return message
-
-
-def _json_object(value: JsonValue | None) -> JsonObject | None:
-    if isinstance(value, dict):
-        return value
-    return None
-
-
-def _optional_str(value: JsonValue | None) -> str | None:
-    if isinstance(value, str) and value.strip():
-        return value.strip()
-    return None
-
-
-def _optional_bool(value: JsonValue | None) -> bool | None:
-    if isinstance(value, bool):
-        return value
-    return None
-
-
-def _optional_int(value: JsonValue | None) -> int | None:
-    if isinstance(value, int) and not isinstance(value, bool):
-        return value
-    return None
-
-
-def _event_type_is_context_compaction(value: str | None) -> bool:
-    return value in {"context_compaction", "compaction", "context.compaction"}
-
-
-def _string_mapping(values: dict[str, JsonValue] | dict[str, str]) -> dict[str, str]:
-    parsed: dict[str, str] = {}
-    for key, value in values.items():
-        if isinstance(value, str) and key.strip() and value.strip():
-            parsed[key.strip()] = value.strip()
-    return parsed
-
-
-def _normalized_mapping(values: dict[str, JsonValue] | dict[str, str]) -> dict[str, str]:
-    parsed: dict[str, str] = {}
-    for key, value in _string_mapping(values).items():
-        parsed[key] = value
-        parsed[key.lower()] = value
-    return parsed
-
-
-def _string_list(value: JsonValue | None) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    return [item.strip() for item in value if isinstance(item, str) and item.strip()]
