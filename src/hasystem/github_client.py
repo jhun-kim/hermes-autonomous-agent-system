@@ -25,6 +25,7 @@ class GitHubLabel:
 DEFAULT_AI_LABELS: Final = (
     GitHubLabel("ai:ready", "0e8a16", "Ready for autonomous AI execution"),
     GitHubLabel("executor:lazycodex", "5319e7", "Use LazyCodex/Codex executor"),
+    GitHubLabel("executor:omx", "5319e7", "Use OmX executor"),
     GitHubLabel("priority:p2", "fbca04", "Default automation priority"),
     GitHubLabel("ai:in-progress", "1d76db", "AI worker is processing this issue"),
     GitHubLabel("ai:blocked", "d93f0b", "AI worker is blocked"),

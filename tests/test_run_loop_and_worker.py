@@ -49,8 +49,8 @@ def test_omx_worker_launcher_builds_non_interactive_exec_command(tmp_path: Path)
     assert "ulw skill/workflow" in command.args[-1]
 
 
-def test_run_loop_dry_run_uses_selected_omx_executor(tmp_path: Path) -> None:
-    # Given: one ready issue and an OmX-configured run loop service.
+def test_run_loop_dry_run_ignores_executor_argument_and_uses_issue_label(tmp_path: Path) -> None:
+    # Given: one ready issue has no executor label, while the caller requests OmX.
     command_runner = RecordingCommandRunner([CommandResult(stdout="", stderr="", returncode=0)])
     github = ReadyIssueClient()
     store = StateStore(tmp_path / "state.db")
@@ -62,12 +62,12 @@ def test_run_loop_dry_run_uses_selected_omx_executor(tmp_path: Path) -> None:
         github_factory=lambda repo: github,
     )
 
-    # When: the loop runs in dry-run mode with OmX selected.
+    # When: the loop runs in dry-run mode with a stale explicit executor argument.
     result = service.run_once(repo_raw="owner/repo", dry_run=True, executor="omx")
 
-    # Then: loop state and worker command both carry OmX executor selection.
-    assert result.loop.executor == "omx"
-    assert result.worker_command.args[0:3] == ("omx", "exec", "--full-auto")
+    # Then: selected issue labels remain the source of truth and default to LazyCodex.
+    assert result.loop.executor == "lazycodex"
+    assert result.worker_command.args == ("codex", ".")
     assert store.get_active_loop("owner/repo") is None
     assert command_runner.commands == []
 
@@ -118,9 +118,101 @@ def test_run_loop_existing_active_loop_uses_stored_executor(tmp_path: Path) -> N
     assert result.worker_command.args[0:3] == ("omx", "exec", "--full-auto")
 
 
+def test_run_loop_dry_run_resolves_omx_executor_from_issue_label(tmp_path: Path) -> None:
+    # Given: the selected issue explicitly requests the OmX executor.
+    command_runner = RecordingCommandRunner([CommandResult(stdout="", stderr="", returncode=0)])
+    issue = GitHubIssue(number=8, title="Run with OmX", body="Use OmX", labels=["ai:ready", "executor:omx"])
+    github = ReadyIssueClient(issue)
+    store = StateStore(tmp_path / "state.db")
+    service = RunLoopService(
+        workspace=Workspace(tmp_path / "workspace", command_runner),
+        store=store,
+        worker=CodexWorkerLauncher(),
+        github_factory=lambda repo: github,
+    )
+
+    # When: the loop selects that issue.
+    result = service.run_once(repo_raw="owner/repo", dry_run=True)
+
+    # Then: the resolved executor is stored in loop state and used for the worker.
+    assert result.loop.executor == "omx"
+    assert result.worker_command.args[0:3] == ("omx", "exec", "--full-auto")
+
+
+def test_run_loop_dry_run_resolves_lazycodex_executor_from_issue_label(tmp_path: Path) -> None:
+    # Given: the selected issue explicitly requests the LazyCodex executor.
+    command_runner = RecordingCommandRunner([CommandResult(stdout="", stderr="", returncode=0)])
+    issue = GitHubIssue(number=9, title="Run with LazyCodex", body="Use Codex", labels=["ai:ready", "executor:lazycodex"])
+    github = ReadyIssueClient(issue)
+    store = StateStore(tmp_path / "state.db")
+    service = RunLoopService(
+        workspace=Workspace(tmp_path / "workspace", command_runner),
+        store=store,
+        worker=CodexWorkerLauncher(executor="omx"),
+        github_factory=lambda repo: github,
+    )
+
+    # When: the loop selects that issue.
+    result = service.run_once(repo_raw="owner/repo", dry_run=True)
+
+    # Then: the issue label wins over the launcher default.
+    assert result.loop.executor == "lazycodex"
+    assert result.worker_command.args == ("codex", ".")
+
+
+def test_run_loop_dry_run_defaults_to_lazycodex_without_executor_label(tmp_path: Path) -> None:
+    # Given: the selected issue has no executor label.
+    command_runner = RecordingCommandRunner([CommandResult(stdout="", stderr="", returncode=0)])
+    issue = GitHubIssue(number=10, title="Run default", body="Use default", labels=["ai:ready", "priority:p2"])
+    github = ReadyIssueClient(issue)
+    store = StateStore(tmp_path / "state.db")
+    service = RunLoopService(
+        workspace=Workspace(tmp_path / "workspace", command_runner),
+        store=store,
+        worker=CodexWorkerLauncher(executor="omx"),
+        github_factory=lambda repo: github,
+    )
+
+    # When: the loop selects that issue.
+    result = service.run_once(repo_raw="owner/repo", dry_run=True)
+
+    # Then: LazyCodex is the documented default.
+    assert result.loop.executor == "lazycodex"
+    assert result.worker_command.args == ("codex", ".")
+
+
+def test_run_loop_dry_run_resolves_conflicting_executor_labels_deterministically(tmp_path: Path) -> None:
+    # Given: the selected issue has both executor labels.
+    command_runner = RecordingCommandRunner([CommandResult(stdout="", stderr="", returncode=0)])
+    issue = GitHubIssue(
+        number=11,
+        title="Run conflict",
+        body="Conflicting labels",
+        labels=["ai:ready", "executor:lazycodex", "executor:omx"],
+    )
+    github = ReadyIssueClient(issue)
+    store = StateStore(tmp_path / "state.db")
+    service = RunLoopService(
+        workspace=Workspace(tmp_path / "workspace", command_runner),
+        store=store,
+        worker=CodexWorkerLauncher(),
+        github_factory=lambda repo: github,
+    )
+
+    # When: the loop selects that issue.
+    result = service.run_once(repo_raw="owner/repo", dry_run=True)
+
+    # Then: documented conflict precedence selects OmX deterministically.
+    assert result.loop.executor == "omx"
+    assert result.worker_command.args[0:3] == ("omx", "exec", "--full-auto")
+
+
 class ReadyIssueClient:
+    def __init__(self, issue: GitHubIssue | None = None) -> None:
+        self.issue = issue or GitHubIssue(number=5, title="Add CLI", body="Build it", labels=["ai:ready", "priority:p2"])
+
     def list_ready_issues(self) -> list[GitHubIssue]:
-        return [GitHubIssue(number=5, title="Add CLI", body="Build it", labels=["ai:ready", "priority:p2"])]
+        return [self.issue]
 
     @staticmethod
     def select_next_issue(issues: list[GitHubIssue]) -> GitHubIssue | None:

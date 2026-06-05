@@ -27,6 +27,7 @@ class RunLoopService:
     github_factory: Callable[[str], GitHubClient] = GitHubClient
 
     def run_once(self, repo_raw: str, dry_run: bool, executor: WorkerExecutor = "lazycodex") -> RunLoopResult | None:
+        _ = executor
         repo = RepoSpec.parse(repo_raw)
         active = self.store.get_active_loop(repo.full_name)
         if active is not None:
@@ -44,12 +45,26 @@ class RunLoopService:
         if issue is None:
             return None
 
-        loop = LoopState.start(repo=repo.full_name, issue=issue, executor=executor)
+        resolved_executor = resolve_worker_executor(issue.labels)
+        loop = LoopState.start(repo=repo.full_name, issue=issue, executor=resolved_executor)
         local_path = repo.local_path(self.workspace.base_path) if dry_run else self.workspace.ensure_repo(repo)
-        selected_worker = replace(self.worker, executor=executor)
+        selected_worker = replace(self.worker, executor=resolved_executor)
         command = selected_worker.build(repo_path=local_path, repo=repo.full_name, issue=issue, branch=loop.branch)
         if not dry_run:
             self.store.save_loop(loop)
             client.mark_in_progress(issue.number)
             self.worker.launch(command)
         return RunLoopResult(loop=loop, worker_command=command, existing_active=False)
+
+
+def resolve_worker_executor(labels: list[str]) -> WorkerExecutor:
+    """Resolve worker executor labels with deterministic conflict precedence.
+
+    OmX is the explicit non-default executor, so `executor:omx` wins when both
+    executor labels are present. `executor:lazycodex` and no executor label both
+    resolve to the LazyCodex/Codex default.
+    """
+    label_set = set(labels)
+    if "executor:omx" in label_set:
+        return "omx"
+    return "lazycodex"

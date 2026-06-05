@@ -46,3 +46,12 @@ def test_intake_clones_repo_and_creates_ready_issue(tmp_path: Path) -> None:
     assert "ai:ready" in issue_command
     assert "executor:lazycodex" in issue_command
     assert "priority:p2" in issue_command
+
+
+def test_default_automation_labels_include_omx_executor_definition() -> None:
+    # Given/When: the required automation labels are defined.
+    label_names = [label.name for label in DEFAULT_AI_LABELS]
+
+    # Then: both supported worker executor labels can be created idempotently.
+    assert "executor:lazycodex" in label_names
+    assert "executor:omx" in label_names
