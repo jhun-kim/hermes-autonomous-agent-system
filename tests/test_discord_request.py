@@ -145,6 +145,7 @@ def test_load_router_config_from_json_file_and_cli_overrides(tmp_path: Path) -> 
                 "channel_default_repos": {"channel-1": "owner/channel-config"},
                 "allow_repos": ["owner/from-cli", "owner/thread-cli"],
                 "default_repo": "owner/default-config",
+                "compaction_rollover_threshold": 3,
             }
         ),
         encoding="utf-8",
@@ -162,6 +163,7 @@ def test_load_router_config_from_json_file_and_cli_overrides(tmp_path: Path) -> 
     assert config.default_for_context(thread_id="thread-1") == "owner/thread-cli"
     assert config.default_repo == "owner/default-config"
     assert config.allow_repos == frozenset({"owner/from-cli", "owner/thread-cli"})
+    assert config.compaction_rollover_threshold == 3
 
 
 def test_parse_discord_request_rejects_repos_not_in_allowlist() -> None:
@@ -298,3 +300,80 @@ def test_gateway_response_dry_run_is_structured_and_non_mutating(tmp_path: Path)
     assert payload["loop"] is None
     assert payload["hints"]["next_action"] == "Remove dry-run to create an issue and optionally start the run loop."
     assert runner.commands == []
+
+
+def test_gateway_response_records_compaction_and_routes_discord_rollover(tmp_path: Path) -> None:
+    # Given: a Discord gateway compaction event and a configurable threshold of two.
+    runner = RecordingCommandRunner([])
+    store = StateStore(tmp_path / "state.db")
+    workspace = Workspace(tmp_path / "workspace", runner)
+    service = DiscordAutomationService(
+        intake=IntakeService(workspace=workspace, runner=runner),
+        loop_runner=RunLoopService(
+            workspace=workspace,
+            store=store,
+            worker=CodexWorkerLauncher(runner=runner),
+            github_factory=lambda repo: GitHubClient(repo=repo, runner=runner),
+        ),
+        router_config=DiscordRequestRouterConfig(default_repo="owner/repo", compaction_rollover_threshold=2),
+    )
+    event = DiscordGatewayEvent.from_json(
+        json.dumps(
+            {
+                "platform": "discord",
+                "channel_id": "channel-1",
+                "thread_id": "thread-1",
+                "content": "continue work",
+                "context_compaction": True,
+                "latest_user_goal": "finish rollover",
+                "active_issue_number": 19,
+            }
+        )
+    )
+    discord = GatewayFakeDiscordClient()
+
+    # When: two compactions arrive through the gateway response seam.
+    first = build_gateway_response(
+        service=service,
+        event=event,
+        dry_run_override=None,
+        no_run_loop_override=None,
+        state_store=store,
+        discord_client=discord,
+    )
+    second = build_gateway_response(
+        service=service,
+        event=event,
+        dry_run_override=None,
+        no_run_loop_override=None,
+        state_store=store,
+        discord_client=discord,
+    )
+
+    # Then: the gateway exposes deterministic count state and routes the rollover into a new Discord thread.
+    assert first["status"] == "compaction_recorded"
+    assert first["continuation"]["compaction_count"] == 1
+    assert second["status"] == "rollover_required"
+    assert second["continuation"]["compaction_count"] == 2
+    assert second["continuation"]["new_thread_id"] == "thread-gateway-new"
+    assert discord.created_parent_channel_ids == ["channel-1"]
+    assert discord.messages[0][0] == "thread-1"
+    assert discord.messages[1][0] == "thread-gateway-new"
+    assert runner.commands == []
+
+
+class GatewayFakeDiscordClient:
+    def __init__(self) -> None:
+        self.created_parent_channel_ids: list[str] = []
+        self.messages: list[tuple[str, str]] = []
+
+    def create_public_thread(self, *, parent_channel_id: str, source_thread_id: str | None, name: str):
+        from hasystem.compaction_rollover import DiscordCreatedThread
+
+        self.created_parent_channel_ids.append(parent_channel_id)
+        assert source_thread_id == "thread-1"
+        assert name == "Hermes continuation after 2 compactions"
+        return DiscordCreatedThread(thread_id="thread-gateway-new", name=name)
+
+    def post_message(self, *, channel_id: str, content: str) -> None:
+        self.messages.append((channel_id, content))

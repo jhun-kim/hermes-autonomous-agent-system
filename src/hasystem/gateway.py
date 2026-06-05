@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +13,7 @@ from .discord_request import (
 )
 from .intake import IntakeResult
 from .loop_runner import RunLoopResult
+from .state_store import StateStore
 
 JsonValue = Any
 JsonObject = dict[str, JsonValue]
@@ -29,6 +30,13 @@ class DiscordGatewayEvent:
     sender_id: str | None = None
     sender_display_name: str | None = None
     repo_hint: str | None = None
+    session_id: str | None = None
+    latest_user_goal: str | None = None
+    session_summary: str | None = None
+    active_issue_number: int | None = None
+    active_issue_title: str | None = None
+    active_issue_labels: list[str] = field(default_factory=list)
+    context_compaction: bool = False
     dry_run: bool = False
     no_run_loop: bool = False
 
@@ -60,6 +68,16 @@ class DiscordGatewayEvent:
                 or _optional_str(sender.get("username"))
             ),
             repo_hint=_optional_str(data.get("repo")) or _optional_str(data.get("repository")) or _optional_str(data.get("repo_hint")),
+            session_id=_optional_str(data.get("session_id")) or _optional_str(data.get("conversation_id")),
+            latest_user_goal=_optional_str(data.get("latest_user_goal")),
+            session_summary=_optional_str(data.get("session_summary")) or _optional_str(data.get("summary")),
+            active_issue_number=_optional_int(data.get("active_issue_number")),
+            active_issue_title=_optional_str(data.get("active_issue_title")),
+            active_issue_labels=_string_list(data.get("active_issue_labels")),
+            context_compaction=(
+                _optional_bool(data.get("context_compaction"))
+                or _event_type_is_context_compaction(_optional_str(data.get("event_type")) or _optional_str(data.get("type")))
+            ),
             dry_run=_optional_bool(data.get("dry_run")) or False,
             no_run_loop=_optional_bool(data.get("no_run_loop")) or False,
         )
@@ -68,6 +86,10 @@ class DiscordGatewayEvent:
         if self.repo_hint is None:
             return self.raw_message
         return json.dumps({"repo": self.repo_hint, "request": self.raw_message})
+
+    def conversation_id(self) -> str:
+        stable_id = self.session_id or self.thread_id or self.channel_id or self.sender_id or "unknown"
+        return f"{self.platform}:{stable_id}"
 
 
 def load_router_config(
@@ -83,6 +105,7 @@ def load_router_config(
     channel_defaults = _string_mapping(_json_object(raw_config.get("channel_default_repos")) or {})
     default_repo = _optional_str(raw_config.get("default_repo"))
     allow_repos = frozenset(_string_list(raw_config.get("allow_repos")))
+    threshold = _optional_int(raw_config.get("compaction_rollover_threshold")) or 7
 
     if repo_alias_overrides:
         repo_aliases.update(_normalized_mapping(repo_alias_overrides))
@@ -98,6 +121,7 @@ def load_router_config(
         default_repo=default_repo,
         channel_default_repos=channel_defaults,
         allow_repos=allow_repos,
+        compaction_rollover_threshold=threshold,
     )
 
 
@@ -107,9 +131,18 @@ def build_gateway_response(
     event: DiscordGatewayEvent,
     dry_run_override: bool | None,
     no_run_loop_override: bool | None,
+    state_store: StateStore | None = None,
+    discord_client: Any | None = None,
 ) -> JsonObject:
     dry_run = event.dry_run if dry_run_override is None else dry_run_override
     no_run_loop = event.no_run_loop if no_run_loop_override is None else no_run_loop_override
+    if event.context_compaction:
+        return _compaction_rollover_payload(
+            event=event,
+            service=service,
+            state_store=state_store,
+            discord_client=discord_client,
+        )
     result = service.handle(
         event.message_for_routing(),
         dry_run=dry_run,
@@ -118,6 +151,48 @@ def build_gateway_response(
         thread_id=event.thread_id,
     )
     return _automation_result_payload(result=result, event=event, no_run_loop=no_run_loop)
+
+
+def _compaction_rollover_payload(
+    *,
+    event: DiscordGatewayEvent,
+    service: DiscordAutomationService,
+    state_store: StateStore | None,
+    discord_client: Any | None,
+) -> JsonObject:
+    if state_store is None:
+        return {
+            "status": "compaction_seen",
+            "platform": event.platform,
+            "event": _event_payload(event),
+            "continuation": {
+                "should_rollover": False,
+                "reason": "No state store was provided, so compaction count was not persisted.",
+            },
+        }
+    from .compaction_rollover import RolloverConfig, record_context_compaction
+
+    result = record_context_compaction(
+        store=state_store,
+        event=event,
+        config=RolloverConfig(threshold=service.router_config.compaction_rollover_threshold),
+        discord_client=discord_client,
+    )
+    return {
+        "status": "rollover_required" if result.should_rollover else "compaction_recorded",
+        "platform": event.platform,
+        "event": _event_payload(event),
+        "continuation": {
+            "conversation_id": result.conversation_id,
+            "compaction_count": result.compaction_count,
+            "threshold": result.threshold,
+            "should_rollover": result.should_rollover,
+            "new_conversation_id": result.new_conversation_id,
+            "new_thread_id": result.new_thread_id,
+            "handoff_message": result.handoff_message,
+            "summary": result.continuation_summary,
+        },
+    }
 
 
 def _automation_result_payload(
@@ -132,11 +207,7 @@ def _automation_result_payload(
         "repo": result.request.repo_raw,
         "parsed_request": {"repo_raw": result.request.repo_raw, "request_text": result.request.request_text},
         "event": {
-            "guild_id": event.guild_id,
-            "channel_id": event.channel_id,
-            "thread_id": event.thread_id,
-            "sender_id": event.sender_id,
-            "sender_display_name": event.sender_display_name,
+            **_event_payload(event),
         },
         "dry_run": result.dry_run,
         "intake": _intake_payload(result.intake),
@@ -144,6 +215,17 @@ def _automation_result_payload(
         "hints": _hints_payload(result=result, no_run_loop=no_run_loop),
     }
     return payload
+
+
+def _event_payload(event: DiscordGatewayEvent) -> JsonObject:
+    return {
+        "guild_id": event.guild_id,
+        "channel_id": event.channel_id,
+        "thread_id": event.thread_id,
+        "sender_id": event.sender_id,
+        "sender_display_name": event.sender_display_name,
+        "session_id": event.session_id,
+    }
 
 
 def _intake_payload(result: IntakeResult | None) -> JsonObject | None:
@@ -232,6 +314,16 @@ def _optional_bool(value: JsonValue | None) -> bool | None:
     if isinstance(value, bool):
         return value
     return None
+
+
+def _optional_int(value: JsonValue | None) -> int | None:
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    return None
+
+
+def _event_type_is_context_compaction(value: str | None) -> bool:
+    return value in {"context_compaction", "compaction", "context.compaction"}
 
 
 def _string_mapping(values: dict[str, JsonValue] | dict[str, str]) -> dict[str, str]:

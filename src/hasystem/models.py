@@ -73,3 +73,24 @@ class LoopState:
             created_at=self.created_at,
             updated_at=self.updated_at,
         )
+
+
+@dataclass(frozen=True)
+class GatewayConversationState:
+    conversation_id: str
+    platform: str
+    guild_id: str | None = None
+    channel_id: str | None = None
+    thread_id: str | None = None
+    repo: str | None = None
+    latest_user_goal: str | None = None
+    latest_summary: str | None = None
+    active_issue_number: int | None = None
+    active_issue_title: str | None = None
+    active_issue_labels: list[str] = field(default_factory=list)
+    compaction_count: int = 0
+    continuation_of: str | None = None
+    continuation_conversation_id: str | None = None
+    continuation_thread_id: str | None = None
+    created_at: str = field(default_factory=utc_now_iso)
+    updated_at: str = field(default_factory=utc_now_iso)

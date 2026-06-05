@@ -32,6 +32,7 @@ class DiscordRequestRouterConfig:
     default_repo: str | None = None
     channel_default_repos: dict[str, str] = field(default_factory=dict)
     allow_repos: frozenset[str] = frozenset()
+    compaction_rollover_threshold: int = 7
 
     def default_for_context(self, *, channel_id: str | None = None, thread_id: str | None = None) -> str | None:
         if thread_id and thread_id in self.channel_default_repos:
