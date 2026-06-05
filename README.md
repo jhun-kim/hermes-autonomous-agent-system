@@ -105,6 +105,16 @@ records through the same hasystem `context.compaction` gateway seam used by the
 rollover adapter. Non-Discord sessions and disabled/default runs are explicit
 no-ops.
 
+Discord rollover still happens after seven context compactions unless
+`compaction_rollover_threshold` overrides it. When the gateway includes the
+current `thread_name` or `channel_name`, continuation thread names stay rooted
+in the original Discord room/thread name for the whole chain: the first
+continuation of `Original planning thread` is
+`Original planning thread continuation 2`, and the next rollover is
+`Original planning thread continuation 3`. If Discord does not provide a
+readable room/thread name, Hermes preserves the legacy fallback name
+`Hermes continuation after <threshold> compactions`.
+
 Low-threshold smoke for a real runtime-shaped lifecycle event:
 
 ```bash

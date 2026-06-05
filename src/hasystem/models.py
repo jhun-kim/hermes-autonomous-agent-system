@@ -108,5 +108,7 @@ class GatewayConversationState:
     continuation_of: str | None = None
     continuation_conversation_id: str | None = None
     continuation_thread_id: str | None = None
+    original_conversation_name: str | None = None
+    continuation_sequence: int = 1
     created_at: str = field(default_factory=utc_now_iso)
     updated_at: str = field(default_factory=utc_now_iso)
