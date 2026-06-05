@@ -473,3 +473,59 @@ def test_finalize_module_records_and_verifies_approval_status(tmp_path: Path) ->
     assert "Approval intent: finalize" in record.stdout
     assert "Approval status: approved" in verify.stdout
     assert "Approval id: approval-789" in verify.stdout
+
+def test_gateway_wrapper_example_is_installed_command_first_and_fail_closed() -> None:
+    # Given: the reusable Discord/Gateway wrapper and router config examples.
+    router = json.loads(Path("examples/hermes-router.json").read_text(encoding="utf-8"))
+    wrapper = Path("scripts/hermes-gateway-wrapper").read_text(encoding="utf-8")
+    event = json.loads(Path("examples/hermes-gateway-event.dry-run.json").read_text(encoding="utf-8"))
+
+    # Then: the example is adaptable for the real installed console script, not only a source checkout.
+    assert "hermes-gateway-adapter --config" in wrapper
+    assert "python3 -m hasystem.commands.gateway_adapter" not in wrapper
+    assert "--dry-run" in wrapper
+    assert "--live" in wrapper
+
+    # And: live routing remains fail-closed by documenting/enforcing an allow-list boundary.
+    assert router["allow_repos"] == ["jhun-kim/hermes-autonomous-agent-system"]
+    assert 'exec hermes-gateway-adapter --config "$CONFIG" --allow-any-repo' not in wrapper
+    assert event["dry_run"] is True
+    assert event["content"].startswith("Hermes,")
+
+
+def test_gateway_router_example_config_loads_for_dry_run(tmp_path: Path) -> None:
+    # Given: the reusable router config and sample Discord event.
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path("src").resolve())
+    event_json = Path("examples/hermes-gateway-event.dry-run.json").read_text(encoding="utf-8")
+
+    # When: the adapter loads the example config in dry-run mode.
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "hasystem.commands.gateway_adapter",
+            "--config",
+            "examples/hermes-router.json",
+            "--event-json",
+            event_json,
+            "--state-db",
+            str(tmp_path / "state.db"),
+            "--workspace",
+            str(tmp_path / "workspace"),
+        ],
+        cwd=Path.cwd(),
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    # Then: it proves routing via the example without mutating local state.
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "dry_run"
+    assert payload["repo"] == "jhun-kim/hermes-autonomous-agent-system"
+    assert payload["parsed_request"]["request_text"] == "run the next ready task"
+    assert not (tmp_path / "state.db").exists()
+    assert not (tmp_path / "workspace").exists()

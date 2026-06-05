@@ -37,6 +37,49 @@ PYTHONPATH=src python3 -m hasystem.commands.run_loop --repo owner/name --dry-run
 
 Hermes can call the CLIs directly from a Discord command handler.
 
+### Reusable installed gateway wrapper example
+
+This repository includes an adaptable production wiring example:
+
+- `examples/hermes-router.json` — repo aliases, channel/thread default repo routing,
+  `default_repo`, and a fail-closed `allow_repos` list.
+- `examples/hermes-gateway-event.dry-run.json` — a minimal Discord event envelope
+  that can be piped into the adapter while validating routing.
+- `scripts/hermes-gateway-wrapper` — a small shell wrapper around the installed
+  `hermes-gateway-adapter` console command.
+
+Dry-run the installed console command directly:
+
+```bash
+hermes-gateway-adapter \
+  --config examples/hermes-router.json \
+  --event-json "$(cat examples/hermes-gateway-event.dry-run.json)"
+```
+
+Dry-run through the reusable wrapper; this is the safest mode to wire into a
+Hermes Discord gateway first because it proves channel/thread routing without
+creating issues, mutating labels, writing loop state, cloning repos, or launching
+workers:
+
+```bash
+scripts/hermes-gateway-wrapper --dry-run \
+  --event-json "$(cat examples/hermes-gateway-event.dry-run.json)"
+```
+
+After dry-run output selects the expected repo, send a live event by removing
+`dry_run: true` from the event JSON and using live mode:
+
+```bash
+jq '.dry_run = false' examples/hermes-gateway-event.dry-run.json | \
+  scripts/hermes-gateway-wrapper --live
+```
+
+Live mode deliberately does **not** pass `--allow-any-repo`. Non-dry-run routing
+therefore stays fail-closed: the selected repository must appear in
+`allow_repos` inside `examples/hermes-router.json`, or the deployment must pass
+an explicit `--allow-repo owner/repo` adapter argument. Use `--allow-any-repo`
+only for a trusted private gateway after reviewing the routing boundary.
+
 ### Gateway adapter for real Discord/Hermes wiring
 
 For a production Hermes Discord/Gateway tool wrapper, prefer the structured

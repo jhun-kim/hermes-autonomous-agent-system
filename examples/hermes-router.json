@@ -1,0 +1,12 @@
+{
+  "repo_aliases": {
+    "hasystem": "jhun-kim/hermes-autonomous-agent-system"
+  },
+  "channel_default_repos": {
+    "1512060115757432833": "jhun-kim/hermes-autonomous-agent-system"
+  },
+  "allow_repos": [
+    "jhun-kim/hermes-autonomous-agent-system"
+  ],
+  "default_repo": "jhun-kim/hermes-autonomous-agent-system"
+}

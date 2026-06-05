@@ -1,0 +1,12 @@
+{
+  "platform": "discord",
+  "guild_id": "1478650515888934932",
+  "channel_id": "1512060115757432833",
+  "thread_id": "1512060115757432833",
+  "sender": {
+    "id": "42",
+    "display_name": "Chai"
+  },
+  "content": "Hermes, hasystem run the next ready task",
+  "dry_run": true
+}
