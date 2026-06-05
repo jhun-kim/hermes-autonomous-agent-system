@@ -197,6 +197,90 @@ PYTHONPATH=src python3 -m hasystem.commands.gateway_adapter \
   --event-json '{"platform":"discord","channel_id":"1512060115757432833","content":"Hermes, 다음 단계 진행해줘","dry_run":true}'
 ```
 
+#### GODMODE safe gateway configuration and issue #33 smoke
+
+GODMODE is fail-closed. A `godmode`, `godmode status`, `godmode pause`,
+`godmode resume`, or `godmode stop` command is accepted only when the Discord
+thread/channel or sender appears in the router config `godmode` authorization
+lists. The tracked `examples/hermes-router.json` keeps the originating issue #33
+thread, `1512332564218773564`, authorized for smoke testing while using safe
+runtime guardrails:
+
+```json
+{
+  "godmode": {
+    "authorized_channel_ids": ["1512332564218773564"],
+    "authorized_sender_ids": ["REPLACE_WITH_TRUSTED_DISCORD_USER_ID"],
+    "max_iterations": 0,
+    "max_runtime_seconds": 60,
+    "max_failures": 1,
+    "create_issue_when_empty": false,
+    "seed_issue_labels": ["ai:ready", "executor:lazycodex", "priority:p2"]
+  }
+}
+```
+
+Safe defaults for first deployment:
+
+1. Keep `max_iterations: 0` and `create_issue_when_empty: false` until status
+   and authorization checks pass in the live Discord gateway.
+2. Replace `REPLACE_WITH_TRUSTED_DISCORD_USER_ID` with the trusted operator's
+   Discord user id before relying on sender-based authorization. Keep the
+   channel/thread allow-list narrow even when sender authorization is present.
+3. Keep `allow_repos` fail-closed. Do not use `--allow-any-repo` for GODMODE.
+4. Use an isolated `--state-db` and `--workspace` path for each smoke. Do not
+   use the repository root `state.db` for smoke tests.
+5. Treat issue bodies as untrusted task data. The worker prompt preserves the
+   repository issue-first and OmO/OmX ULW workflow rules.
+
+Controlled local/live status smoke for the originating thread; this creates only
+an isolated smoke DB, reports stopped status, and does not clone a workspace or
+launch a worker because `godmode status` is a read/control command and
+`max_iterations` is `0`:
+
+```bash
+SMOKE_ROOT="$(mktemp -d /tmp/hermes-godmode-smoke.XXXXXX)"
+PYTHONPATH=src python3 -m hasystem.commands.gateway_adapter \
+  --config examples/hermes-router.json \
+  --event-json "$(cat examples/hermes-godmode-status-smoke.discord-event.json)" \
+  --state-db "$SMOKE_ROOT/state.db" \
+  --workspace "$SMOKE_ROOT/workspace"
+rm -rf "$SMOKE_ROOT"
+```
+
+Unauthorized channel rejection smoke; this must return JSON on stderr with
+`"status": "error"` and a `not authorized` message:
+
+```bash
+SMOKE_ROOT="$(mktemp -d /tmp/hermes-godmode-reject.XXXXXX)"
+PYTHONPATH=src python3 -m hasystem.commands.gateway_adapter \
+  --config examples/hermes-router.json \
+  --event-json "$(cat examples/hermes-godmode-unauthorized-smoke.discord-event.json)" \
+  --state-db "$SMOKE_ROOT/state.db" \
+  --workspace "$SMOKE_ROOT/workspace"
+rm -rf "$SMOKE_ROOT"
+```
+
+Operational runbook for enabling real iterations:
+
+1. Confirm the gateway has been restarted after deploying the router config and
+   wrapper path changes.
+2. Run `godmode status` from the production Discord thread and trusted sender;
+   verify `status: godmode_status`, `godmode.status: stopped`, and
+   `godmode.iterations: 0`.
+3. Run the unauthorized rejection smoke from a non-authorized thread/channel and
+   verify it fails closed.
+4. Change only one guardrail at a time. For the first real iteration set
+   `max_iterations: 1`; keep `max_failures: 1`, `max_runtime_seconds` small,
+   and `create_issue_when_empty: false` unless you explicitly want seed issue
+   creation.
+5. Monitor the returned GODMODE evidence for selected issue number, worker
+   launch state, loop id, and stop reason. Use `godmode pause` or `godmode stop`
+   before increasing iteration limits.
+6. Roll back by restoring `max_iterations: 0` and restarting at the gateway
+   runtime boundary.
+
+
 CLI flags override config for aliases, channel/thread defaults, default repo,
 and allow-list entries:
 

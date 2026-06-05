@@ -1,0 +1,12 @@
+{
+  "platform": "discord",
+  "guild_id": "1478650515888934932",
+  "channel_id": "unauthorized-channel",
+  "thread_id": "unauthorized-thread",
+  "sender": {
+    "id": "unauthorized-user",
+    "display_name": "Intruder"
+  },
+  "content": "godmode status",
+  "dry_run": false
+}

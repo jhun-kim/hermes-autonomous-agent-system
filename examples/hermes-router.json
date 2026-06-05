@@ -3,10 +3,30 @@
     "hasystem": "jhun-kim/hermes-autonomous-agent-system"
   },
   "channel_default_repos": {
-    "1512060115757432833": "jhun-kim/hermes-autonomous-agent-system"
+    "1512060115757432833": "jhun-kim/hermes-autonomous-agent-system",
+    "1512332564218773564": "jhun-kim/hermes-autonomous-agent-system"
   },
   "allow_repos": [
     "jhun-kim/hermes-autonomous-agent-system"
   ],
-  "default_repo": "jhun-kim/hermes-autonomous-agent-system"
+  "default_repo": "jhun-kim/hermes-autonomous-agent-system",
+  "godmode": {
+    "authorized_channel_ids": [
+      "1512332564218773564"
+    ],
+    "authorized_sender_ids": [
+      "REPLACE_WITH_TRUSTED_DISCORD_USER_ID"
+    ],
+    "max_iterations": 0,
+    "max_runtime_seconds": 60,
+    "max_failures": 1,
+    "create_issue_when_empty": false,
+    "seed_issue_title": "GODMODE follow-up task",
+    "seed_issue_body": "GODMODE could not find an ai:ready issue. Inspect the repository, identify the next concrete improvement, implement it with the issue-first OmO/OmX ULW workflow, and create another follow-up issue if more work remains.",
+    "seed_issue_labels": [
+      "ai:ready",
+      "executor:lazycodex",
+      "priority:p2"
+    ]
+  }
 }
