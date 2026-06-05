@@ -26,8 +26,10 @@ When launching or instructing coding workers for repository tasks, use cmux as t
 
 1. Prefer the caller/current cmux workspace (`CMUX_WORKSPACE_ID`) when present.
 2. For Discord-originated work, treat the Discord thread as the cmux workspace boundary. Derive one deterministic workspace name from the Discord thread/channel context and keep all work for that thread in that workspace.
-3. Add terminal surfaces/panes inside that workspace for parallel workers; do not open unbounded Terminal.app windows or unrelated cmux workspaces.
-4. Run Codex, OmX, and OmO as worker engines inside those cmux surfaces. Choose engines by issue labels or decomposition needs, but keep cmux as the workspace/surface orchestration layer.
-5. Keep layout changes additive and focus-neutral (`--focus false` where supported).
-6. If no Discord/caller workspace exists, create one cmux workspace rooted at the target repository.
-7. LazyCodex/OmX/OmO/ULW may remain worker-engine or execution-discipline standards, but they must not replace cmux as the workspace/surface orchestration layer.
+3. Provision the Discord-thread workspace with **10 additive terminal surfaces by default** for parallel workers. Do not collapse them into one terminal, and do not create unrelated cmux workspaces for the same Discord thread.
+4. Run Codex CLI in those surfaces and instruct it to use OmX/OmO skills/workflows, especially ULW for implementation work. OmX/OmO can also be selected as worker engines by labels, but cmux remains the workspace/surface layer.
+5. Split parallel work by git worktree/branch, using per-surface branches such as `ai/issue-51-topic/surface-01` through `surface-10`, so workers do not fight over the same index or working tree.
+6. After worker branches finish, verify each branch, merge/combine the accepted branch changes into an integration branch, push, create/update the PR, and include the issue number in the PR body.
+7. Keep layout changes additive and focus-neutral (`--focus false` where supported).
+8. If no Discord/caller workspace exists, create one cmux workspace rooted at the target repository.
+9. LazyCodex/OmX/OmO/ULW may remain worker-engine or execution-discipline standards, but they must not replace cmux as the workspace/surface orchestration layer.

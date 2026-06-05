@@ -21,8 +21,10 @@ External commands go through a subprocess runner abstraction so tests can fake `
 Repository coding work is orchestrated through [cmux](https://github.com/manaflow-ai/cmux) workspace and surface primitives when cmux is installed:
 
 - If the runtime is already inside cmux, `CMUX_WORKSPACE_ID` is the default target. The launcher creates an additional terminal surface in that caller workspace and sends the worker command there.
-- For Discord-originated work, the Discord thread is the workspace boundary. The launcher derives a deterministic workspace name from `thread_name`/`thread_id` (falling back to channel context), reuses that workspace when present, creates it when absent, and adds one terminal surface per worker launch.
+- For Discord-originated work, the Discord thread is the workspace boundary. The launcher derives a deterministic workspace name from `thread_name`/`thread_id` (falling back to channel context), reuses that workspace when present, creates it when absent, and provisions ten additive terminal surfaces by default for parallel Codex workers.
+- Each default surface runs Codex CLI with a prompt that explicitly requires OmX/OmO skills/workflows, especially ULW for implementation work. OmX and OmO can still be selected as direct worker engines by labels, but Codex-in-cmux is the default surface shape.
 - Parallel decomposition should increase surfaces inside the same Discord-thread workspace: Codex, OmX, and OmO workers can run side by side as separate cmux surfaces for the same thread.
+- Branch isolation is mandatory for parallel surfaces. Use per-surface git worktrees and branches such as `ai/issue-51-topic/surface-01` through `surface-10`, then merge/combine verified branches into an integration branch before pushing and opening PR work.
 - If no Discord context or caller workspace is available, the launcher creates one cmux workspace rooted at the target repository with `cmux new-workspace --cwd <repo> --command <worker> --focus false`.
 - Worker launches are additive and focus-neutral. Do not select other workspaces, focus panes, open unbounded Terminal.app windows, or create unrelated cmux workspaces for parallel coding work.
 - `executor:lazycodex`/`executor:codex`, `executor:omx`, and `executor:omo` select the worker engine/prompt shape. They do not select the terminal/session manager; cmux owns that layer.
