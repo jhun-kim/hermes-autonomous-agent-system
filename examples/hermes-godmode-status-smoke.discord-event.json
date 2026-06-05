@@ -1,0 +1,12 @@
+{
+  "platform": "discord",
+  "guild_id": "1478650515888934932",
+  "channel_id": "1512332564218773564",
+  "thread_id": "1512332564218773564",
+  "sender": {
+    "id": "REPLACE_WITH_TRUSTED_DISCORD_USER_ID",
+    "display_name": "Issue33Smoke"
+  },
+  "content": "godmode status",
+  "dry_run": false
+}

@@ -529,3 +529,114 @@ def test_gateway_router_example_config_loads_for_dry_run(tmp_path: Path) -> None
     assert payload["parsed_request"]["request_text"] == "run the next ready task"
     assert not (tmp_path / "state.db").exists()
     assert not (tmp_path / "workspace").exists()
+
+
+def test_example_router_config_documents_safe_godmode_defaults_for_issue_33_thread() -> None:
+    # Given: the tracked gateway router example used for Discord operations.
+    config = json.loads(Path("examples/hermes-router.json").read_text(encoding="utf-8"))
+
+    # When: GODMODE settings are inspected for the originating issue #33 thread.
+    godmode = config["godmode"]
+
+    # Then: the example is fail-closed and safe to smoke without launching workers.
+    assert "1512332564218773564" in godmode["authorized_channel_ids"]
+    assert godmode["authorized_sender_ids"] == ["REPLACE_WITH_TRUSTED_DISCORD_USER_ID"]
+    assert godmode["max_iterations"] == 0
+    assert godmode["max_runtime_seconds"] <= 60
+    assert godmode["max_failures"] == 1
+    assert godmode["create_issue_when_empty"] is False
+
+
+def test_gateway_adapter_godmode_status_smoke_uses_example_config_without_worker_launch(tmp_path: Path) -> None:
+    # Given: an isolated live-mode gateway invocation for the issue #33 originating Discord thread.
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path("src").resolve())
+    state_db = tmp_path / "issue33-godmode-smoke.db"
+    workspace = tmp_path / "workspace"
+    event = json.dumps(
+        {
+            "platform": "discord",
+            "guild_id": "1478650515888934932",
+            "channel_id": "1512332564218773564",
+            "thread_id": "1512332564218773564",
+            "sender": {"id": "REPLACE_WITH_TRUSTED_DISCORD_USER_ID", "display_name": "Issue33Smoke"},
+            "content": "godmode status",
+            "dry_run": False,
+        }
+    )
+
+    # When: the adapter handles the status command through the tracked router config.
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "hasystem.commands.gateway_adapter",
+            "--config",
+            "examples/hermes-router.json",
+            "--event-json",
+            event,
+            "--state-db",
+            str(state_db),
+            "--workspace",
+            str(workspace),
+        ],
+        cwd=Path.cwd(),
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    # Then: status is safe, bounded, and does not clone or launch a worker.
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "godmode_status"
+    assert payload["godmode"]["status"] == "stopped"
+    assert payload["godmode"]["iterations"] == 0
+    assert payload["godmode"]["conversation_id"] == "discord:1512332564218773564"
+    assert not workspace.exists()
+
+
+def test_gateway_adapter_godmode_rejects_unauthorized_channel_with_example_config(tmp_path: Path) -> None:
+    # Given: a live-mode GODMODE command from a channel that is not in the tracked allow-list.
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path("src").resolve())
+    event = json.dumps(
+        {
+            "platform": "discord",
+            "channel_id": "unauthorized-channel",
+            "thread_id": "unauthorized-thread",
+            "sender": {"id": "unauthorized-user", "display_name": "Intruder"},
+            "content": "godmode status",
+            "dry_run": False,
+        }
+    )
+
+    # When: the adapter handles the unauthorized GODMODE command.
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "hasystem.commands.gateway_adapter",
+            "--config",
+            "examples/hermes-router.json",
+            "--event-json",
+            event,
+            "--state-db",
+            str(tmp_path / "issue33-unauthorized.db"),
+            "--workspace",
+            str(tmp_path / "workspace"),
+        ],
+        cwd=Path.cwd(),
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    # Then: GODMODE fails closed before any workspace or worker side effect.
+    assert result.returncode == 2
+    payload = json.loads(result.stderr)
+    assert payload["status"] == "error"
+    assert "not authorized" in payload["error"]
+    assert not (tmp_path / "workspace").exists()
