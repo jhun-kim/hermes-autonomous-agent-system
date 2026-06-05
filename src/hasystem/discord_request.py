@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Final
 
+from .godmode import GodmodeAuthorizationError, GodmodeConfig, GodmodeContext, GodmodeResult, GodmodeService, parse_godmode_command
 from .intake import IntakeResult, IntakeService
 from .loop_runner import RunLoopResult, RunLoopService
 
@@ -33,6 +34,7 @@ class DiscordRequestRouterConfig:
     channel_default_repos: dict[str, str] = field(default_factory=dict)
     allow_repos: frozenset[str] = frozenset()
     compaction_rollover_threshold: int = 7
+    godmode: GodmodeConfig = field(default_factory=GodmodeConfig)
 
     def default_for_context(self, *, channel_id: str | None = None, thread_id: str | None = None) -> str | None:
         if thread_id and thread_id in self.channel_default_repos:
@@ -58,6 +60,7 @@ class DiscordAutomationResult:
     intake: IntakeResult | None
     loop: RunLoopResult | None
     dry_run: bool
+    godmode: GodmodeResult | None = None
 
 
 @dataclass(frozen=True)
@@ -74,7 +77,36 @@ class DiscordAutomationService:
         run_loop: bool = True,
         channel_id: str | None = None,
         thread_id: str | None = None,
+        sender_id: str | None = None,
     ) -> DiscordAutomationResult:
+        godmode_action = parse_godmode_command(raw_message)
+        if godmode_action is not None:
+            repo_raw = self.router_config.default_for_context(channel_id=channel_id, thread_id=thread_id)
+            if repo_raw is None:
+                raise DiscordRequestParseError("godmode requires a configured repo hint or channel/default repo")
+            repo = self.router_config.ensure_allowed(repo_raw)
+            conversation_id = f"discord:{thread_id or channel_id or sender_id or 'unknown'}"
+            try:
+                godmode = GodmodeService(loop_runner=self.loop_runner, config=self.router_config.godmode).handle(
+                    godmode_action,
+                    GodmodeContext(
+                        conversation_id=conversation_id,
+                        repo=repo,
+                        channel_id=channel_id,
+                        thread_id=thread_id,
+                        sender_id=sender_id,
+                    ),
+                )
+            except GodmodeAuthorizationError as exc:
+                raise DiscordRequestParseError(str(exc)) from exc
+            return DiscordAutomationResult(
+                request=DiscordRequest(repo_raw=repo, request_text=raw_message.strip()),
+                intake=None,
+                loop=None,
+                dry_run=dry_run,
+                godmode=godmode,
+            )
+
         request = parse_discord_request(
             raw_message,
             config=self.router_config,

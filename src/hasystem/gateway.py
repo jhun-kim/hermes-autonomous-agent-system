@@ -25,6 +25,7 @@ from .discord_request import (
     DiscordRequestParseError,
     DiscordRequestRouterConfig,
 )
+from .godmode import GodmodeAction, GodmodeAuthorizationError, GodmodeConfig, GodmodeContext, GodmodeResult, GodmodeService, parse_godmode_command
 from .intake import IntakeResult
 from .loop_runner import RunLoopResult
 from .state_store import StateStore
@@ -129,6 +130,7 @@ def load_router_config(
     default_repo = _optional_str(raw_config.get("default_repo"))
     allow_repos = frozenset(_string_list(raw_config.get("allow_repos")))
     threshold = _optional_int(raw_config.get("compaction_rollover_threshold")) or 7
+    godmode_config = _godmode_config(raw_config)
 
     if repo_alias_overrides:
         repo_aliases.update(_normalized_mapping(repo_alias_overrides))
@@ -145,8 +147,26 @@ def load_router_config(
         channel_default_repos=channel_defaults,
         allow_repos=allow_repos,
         compaction_rollover_threshold=threshold,
+        godmode=godmode_config,
     )
 
+
+
+def _godmode_config(raw_config: JsonObject) -> GodmodeConfig:
+    raw_godmode = _json_object(raw_config.get("godmode")) or {}
+    return GodmodeConfig(
+        authorized_channel_ids=frozenset(_string_list(raw_godmode.get("authorized_channel_ids"))),
+        authorized_sender_ids=frozenset(_string_list(raw_godmode.get("authorized_sender_ids"))),
+        max_iterations=_optional_int(raw_godmode.get("max_iterations")) or 3,
+        max_runtime_seconds=_optional_int(raw_godmode.get("max_runtime_seconds")) or 300,
+        max_failures=_optional_int(raw_godmode.get("max_failures")) or 1,
+        create_issue_when_empty=_optional_bool(raw_godmode.get("create_issue_when_empty")) or False,
+        seed_issue_title=_optional_str(raw_godmode.get("seed_issue_title")) or "GODMODE follow-up task",
+        seed_issue_body=(
+            _optional_str(raw_godmode.get("seed_issue_body")) or GodmodeConfig().seed_issue_body
+        ),
+        seed_issue_labels=tuple(_string_list(raw_godmode.get("seed_issue_labels"))) or GodmodeConfig().seed_issue_labels,
+    )
 
 def build_gateway_response(
     *,
@@ -166,15 +186,76 @@ def build_gateway_response(
             state_store=state_store,
             discord_client=discord_client,
         )
+    godmode_action = parse_godmode_command(event.raw_message)
+    if godmode_action is not None:
+        return _godmode_payload(service=service, event=event, action=godmode_action)
     result = service.handle(
         event.message_for_routing(),
         dry_run=dry_run,
         run_loop=not no_run_loop,
         channel_id=event.channel_id,
         thread_id=event.thread_id,
+        sender_id=event.sender_id,
     )
     return _automation_result_payload(result=result, event=event, no_run_loop=no_run_loop)
 
+
+
+def _godmode_payload(*, service: DiscordAutomationService, event: DiscordGatewayEvent, action: GodmodeAction) -> JsonObject:
+    repo_raw = event.repo_hint or service.router_config.default_for_context(
+        channel_id=event.channel_id,
+        thread_id=event.thread_id,
+    )
+    if repo_raw is None:
+        raise DiscordRequestParseError("godmode requires a configured repo hint or channel/default repo")
+    repo = service.router_config.ensure_allowed(repo_raw)
+    try:
+        result = GodmodeService(
+            loop_runner=service.loop_runner,
+            config=service.router_config.godmode,
+        ).handle(
+            action,
+            GodmodeContext(
+                conversation_id=event.conversation_id(),
+                repo=repo,
+                channel_id=event.channel_id,
+                thread_id=event.thread_id,
+                sender_id=event.sender_id,
+            ),
+        )
+    except GodmodeAuthorizationError as exc:
+        raise DiscordRequestParseError(str(exc)) from exc
+    return {
+        "status": _godmode_status(result),
+        "platform": event.platform,
+        "event": _event_payload(event),
+        "godmode": _godmode_result_payload(result),
+    }
+
+
+def _godmode_status(result: GodmodeResult) -> str:
+    if result.action == "status":
+        return "godmode_status"
+    return f"godmode_{result.session.status}"
+
+
+def _godmode_result_payload(result: GodmodeResult) -> JsonObject:
+    session = result.session
+    return {
+        "action": result.action,
+        "conversation_id": session.conversation_id,
+        "repo": session.repo,
+        "status": session.status,
+        "iterations": session.iterations,
+        "failures": session.failures,
+        "last_issue": {"number": session.last_issue_number, "title": session.last_issue_title}
+        if session.last_issue_number is not None
+        else None,
+        "stop_reason": session.stop_reason,
+        "evidence": session.evidence,
+        "started_at": session.started_at,
+        "updated_at": session.updated_at,
+    }
 
 def _compaction_rollover_payload(
     *,

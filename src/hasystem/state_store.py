@@ -4,7 +4,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-from .models import ACTIVE_PHASES, ApprovalState, GatewayConversationState, GitHubIssue, LoopState, utc_now_iso
+from .models import ACTIVE_PHASES, ApprovalState, GatewayConversationState, GitHubIssue, GodmodeSession, LoopState, utc_now_iso
 
 
 class StateStore:
@@ -41,6 +41,23 @@ class StateStore:
                 """
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_loops_repo_phase ON loops(repo, phase)")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS godmode_sessions (
+                    conversation_id TEXT PRIMARY KEY,
+                    repo TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    iterations INTEGER NOT NULL,
+                    failures INTEGER NOT NULL,
+                    last_issue_number INTEGER,
+                    last_issue_title TEXT,
+                    stop_reason TEXT,
+                    evidence TEXT NOT NULL DEFAULT '[]',
+                    started_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS gateway_conversations (
@@ -122,6 +139,45 @@ class StateStore:
         with self._connect() as conn:
             row = conn.execute(query, (repo, *ACTIVE_PHASES)).fetchone()
         return self._row_to_loop(row) if row else None
+
+    def save_godmode_session(self, session: GodmodeSession) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO godmode_sessions (
+                    conversation_id, repo, status, iterations, failures, last_issue_number,
+                    last_issue_title, stop_reason, evidence, started_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(conversation_id) DO UPDATE SET
+                    repo=excluded.repo,
+                    status=excluded.status,
+                    iterations=excluded.iterations,
+                    failures=excluded.failures,
+                    last_issue_number=excluded.last_issue_number,
+                    last_issue_title=excluded.last_issue_title,
+                    stop_reason=excluded.stop_reason,
+                    evidence=excluded.evidence,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    session.conversation_id,
+                    session.repo,
+                    session.status,
+                    session.iterations,
+                    session.failures,
+                    session.last_issue_number,
+                    session.last_issue_title,
+                    session.stop_reason,
+                    json.dumps(session.evidence),
+                    session.started_at,
+                    session.updated_at,
+                ),
+            )
+
+    def get_godmode_session(self, conversation_id: str) -> GodmodeSession | None:
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM godmode_sessions WHERE conversation_id = ?", (conversation_id,)).fetchone()
+        return self._row_to_godmode_session(row) if row else None
 
     def increment_gateway_compaction(
         self,
@@ -214,6 +270,22 @@ class StateStore:
                 """,
                 (new_state.conversation_id, continuation_thread_id, updated_at, old_conversation_id),
             )
+
+    @staticmethod
+    def _row_to_godmode_session(row: sqlite3.Row) -> GodmodeSession:
+        return GodmodeSession(
+            conversation_id=row["conversation_id"],
+            repo=row["repo"],
+            status=row["status"],
+            iterations=int(row["iterations"]),
+            failures=int(row["failures"]),
+            last_issue_number=row["last_issue_number"],
+            last_issue_title=row["last_issue_title"],
+            stop_reason=row["stop_reason"],
+            evidence=json.loads(row["evidence"]),
+            started_at=row["started_at"],
+            updated_at=row["updated_at"],
+        )
 
     @staticmethod
     def _row_to_loop(row: sqlite3.Row) -> LoopState:
