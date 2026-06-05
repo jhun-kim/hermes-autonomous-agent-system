@@ -1,5 +1,7 @@
 # Hermes Autonomous Agent System
 
+[![CI](https://github.com/jhun-kim/hermes-autonomous-agent-system/actions/workflows/ci.yml/badge.svg)](https://github.com/jhun-kim/hermes-autonomous-agent-system/actions/workflows/ci.yml)
+
 MVP orchestrator for a human-governed Hermes + GitHub + Discord + LazyCodex/OMX workflow.
 
 Current scope:
