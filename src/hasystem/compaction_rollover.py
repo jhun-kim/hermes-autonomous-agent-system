@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Protocol, Final
 from urllib import error, request
 
+from .compaction_thread_names import build_continuation_thread_name
 from .gateway import DiscordGatewayEvent
 from .models import GatewayConversationState, utc_now_iso
 from .state_store import StateStore
@@ -117,6 +118,7 @@ def record_context_compaction(
         guild_id=event.guild_id,
         channel_id=event.channel_id,
         thread_id=event.thread_id,
+        conversation_name=event.thread_name or event.channel_name,
         repo=event.repo_hint,
         latest_user_goal=event.latest_user_goal or event.raw_message,
         latest_summary=event.session_summary,
@@ -173,11 +175,19 @@ def _rollover_discord(
             continuation_summary=summary,
         )
 
-    thread_name = f"Hermes continuation after {threshold} compactions"
+    fallback_name = f"Hermes continuation after {threshold} compactions"
+    current_name = event.thread_name or event.channel_name
+    original_name = None if state.original_conversation_name == current_name else state.original_conversation_name
+    thread_name = build_continuation_thread_name(
+        original_name=original_name,
+        current_name=current_name,
+        current_sequence=state.continuation_sequence,
+        fallback_name=fallback_name,
+    )
     created = discord_client.create_public_thread(
         parent_channel_id=event.channel_id,
         source_thread_id=event.thread_id,
-        name=thread_name,
+        name=thread_name.next_name,
     )
     new_conversation_id = f"discord:{created.thread_id}"
     handoff = _discord_handoff_message(threshold=threshold, created=created)
@@ -200,6 +210,8 @@ def _rollover_discord(
             active_issue_labels=event.active_issue_labels,
             compaction_count=0,
             continuation_of=state.conversation_id,
+            original_conversation_name=thread_name.original_name,
+            continuation_sequence=thread_name.sequence,
             created_at=utc_now_iso(),
             updated_at=utc_now_iso(),
         ),

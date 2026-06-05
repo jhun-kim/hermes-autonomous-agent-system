@@ -76,15 +76,35 @@ class StateStore:
                     continuation_of TEXT,
                     continuation_conversation_id TEXT,
                     continuation_thread_id TEXT,
+                    original_conversation_name TEXT,
+                    continuation_sequence INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
                 """
             )
+            self._ensure_gateway_conversation_column(
+                conn,
+                name="original_conversation_name",
+                definition="TEXT",
+            )
+            self._ensure_gateway_conversation_column(
+                conn,
+                name="continuation_sequence",
+                definition="INTEGER NOT NULL DEFAULT 1",
+            )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_gateway_conversations_platform_updated "
                 "ON gateway_conversations(platform, updated_at)"
             )
+
+    @staticmethod
+    def _ensure_gateway_conversation_column(conn: sqlite3.Connection, *, name: str, definition: str) -> None:
+        try:
+            conn.execute(f"ALTER TABLE gateway_conversations ADD COLUMN {name} {definition}")
+        except sqlite3.OperationalError as exc:
+            if "duplicate column name" not in str(exc).lower():
+                raise
 
     def save_loop(self, loop: LoopState) -> None:
         updated_at = utc_now_iso()
@@ -187,6 +207,7 @@ class StateStore:
         guild_id: str | None = None,
         channel_id: str | None = None,
         thread_id: str | None = None,
+        conversation_name: str | None = None,
         repo: str | None = None,
         latest_user_goal: str | None = None,
         latest_summary: str | None = None,
@@ -215,6 +236,7 @@ class StateStore:
                     active_issue_title=active_issue_title,
                     active_issue_labels=labels,
                     compaction_count=1,
+                    original_conversation_name=conversation_name,
                     created_at=updated_at,
                     updated_at=updated_at,
                 )
@@ -236,6 +258,8 @@ class StateStore:
                     continuation_of=previous.continuation_of,
                     continuation_conversation_id=previous.continuation_conversation_id,
                     continuation_thread_id=previous.continuation_thread_id,
+                    original_conversation_name=previous.original_conversation_name or conversation_name,
+                    continuation_sequence=previous.continuation_sequence,
                     created_at=previous.created_at,
                     updated_at=updated_at,
                 )
@@ -320,8 +344,9 @@ class StateStore:
                 conversation_id, platform, guild_id, channel_id, thread_id, repo,
                 latest_user_goal, latest_summary, active_issue_number, active_issue_title,
                 active_issue_labels, compaction_count, continuation_of,
-                continuation_conversation_id, continuation_thread_id, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                continuation_conversation_id, continuation_thread_id, original_conversation_name,
+                continuation_sequence, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(conversation_id) DO UPDATE SET
                 platform=excluded.platform,
                 guild_id=excluded.guild_id,
@@ -337,6 +362,8 @@ class StateStore:
                 continuation_of=excluded.continuation_of,
                 continuation_conversation_id=excluded.continuation_conversation_id,
                 continuation_thread_id=excluded.continuation_thread_id,
+                original_conversation_name=excluded.original_conversation_name,
+                continuation_sequence=excluded.continuation_sequence,
                 updated_at=excluded.updated_at
             """,
             (
@@ -355,6 +382,8 @@ class StateStore:
                 state.continuation_of,
                 state.continuation_conversation_id,
                 state.continuation_thread_id,
+                state.original_conversation_name,
+                state.continuation_sequence,
                 state.created_at,
                 state.updated_at,
             ),
@@ -378,6 +407,8 @@ class StateStore:
             continuation_of=row["continuation_of"],
             continuation_conversation_id=row["continuation_conversation_id"],
             continuation_thread_id=row["continuation_thread_id"],
+            original_conversation_name=row["original_conversation_name"],
+            continuation_sequence=int(row["continuation_sequence"]),
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )

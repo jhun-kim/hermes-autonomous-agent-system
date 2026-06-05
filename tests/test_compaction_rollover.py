@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from hasystem.compaction_rollover import (
+    CompactionRolloverResult,
     DEFAULT_COMPACTION_ROLLOVER_THRESHOLD,
     DiscordCreatedThread,
     RolloverConfig,
@@ -88,6 +89,96 @@ def test_discord_rollover_creates_thread_posts_handoff_and_resets_count(tmp_path
     assert new_state.active_issue_number == 19
 
 
+def test_discord_rollover_names_repeated_continuations_from_original_thread_name(tmp_path: Path) -> None:
+    # Given: an original Discord thread with a readable name and a low rollover threshold.
+    store = StateStore(tmp_path / "state.db")
+    config = RolloverConfig(threshold=2)
+    fake_discord = FakeDiscordContinuationClient(thread_ids=["thread-2", "thread-3"])
+    original_event = DiscordGatewayEvent(
+        raw_message="continue issue #36",
+        platform="discord",
+        guild_id="guild-1",
+        channel_id="channel-1",
+        thread_id="thread-1",
+        thread_name="Original planning thread",
+        repo_hint="owner/repo",
+    )
+
+    # When: the original thread rolls over, and then its continuation rolls over again.
+    first_result = _record_until_rollover(
+        store=store,
+        event=original_event,
+        config=config,
+        fake_discord=fake_discord,
+    )
+    continuation_event = DiscordGatewayEvent(
+        raw_message="continue issue #36 again",
+        platform="discord",
+        guild_id="guild-1",
+        channel_id="channel-1",
+        thread_id=first_result.new_thread_id,
+        thread_name="Original planning thread continuation 2",
+        repo_hint="owner/repo",
+    )
+    second_result = _record_until_rollover(
+        store=store,
+        event=continuation_event,
+        config=config,
+        fake_discord=fake_discord,
+    )
+
+    # Then: each new thread name is based on the original thread name with a deterministic sequence suffix.
+    assert first_result.new_thread_id == "thread-2"
+    assert second_result.new_thread_id == "thread-3"
+    assert [thread["name"] for thread in fake_discord.created_threads] == [
+        "Original planning thread continuation 2",
+        "Original planning thread continuation 3",
+    ]
+
+
+def test_rollover_name_uses_persisted_original_name_when_latest_thread_has_suffix(tmp_path: Path) -> None:
+    # Given: a continuation conversation whose latest Discord thread name already has a continuation suffix.
+    store = StateStore(tmp_path / "state.db")
+    config = RolloverConfig(threshold=1)
+    fake_discord = FakeDiscordContinuationClient(thread_ids=["thread-3"])
+    original_event = DiscordGatewayEvent(
+        raw_message="continue issue #36",
+        platform="discord",
+        guild_id="guild-1",
+        channel_id="channel-1",
+        thread_id="thread-1",
+        thread_name="Original planning thread",
+        repo_hint="owner/repo",
+    )
+    first_result = record_context_compaction(
+        store=store,
+        event=original_event,
+        config=config,
+        discord_client=FakeDiscordContinuationClient(thread_ids=["thread-2"]),
+    )
+    continuation_event = DiscordGatewayEvent(
+        raw_message="continue issue #36 again",
+        platform="discord",
+        guild_id="guild-1",
+        channel_id="channel-1",
+        thread_id=first_result.new_thread_id,
+        thread_name="Original planning thread continuation 2",
+        repo_hint="owner/repo",
+    )
+
+    # When: the suffixed continuation thread reaches rollover.
+    result = record_context_compaction(
+        store=store,
+        event=continuation_event,
+        config=config,
+        discord_client=fake_discord,
+    )
+
+    # Then: the next name increments from the original base instead of nesting the latest suffix.
+    assert result.new_thread_id == "thread-3"
+    assert fake_discord.created_threads[0]["name"] == "Original planning thread continuation 3"
+
+
 def test_unsupported_platform_rollover_noops_safely_without_discord_thread(tmp_path: Path) -> None:
     # Given: a non-Discord platform at the rollover threshold.
     store = StateStore(tmp_path / "state.db")
@@ -135,8 +226,22 @@ def test_rollover_threshold_is_configurable(tmp_path: Path) -> None:
     assert second.compaction_count == 2
 
 
+def _record_until_rollover(
+    *,
+    store: StateStore,
+    event: DiscordGatewayEvent,
+    config: RolloverConfig,
+    fake_discord: "FakeDiscordContinuationClient",
+) -> CompactionRolloverResult:
+    result = record_context_compaction(store=store, event=event, config=config, discord_client=fake_discord)
+    while not result.should_rollover:
+        result = record_context_compaction(store=store, event=event, config=config, discord_client=fake_discord)
+    return result
+
+
 @dataclass
 class FakeDiscordContinuationClient:
+    thread_ids: list[str] = field(default_factory=lambda: ["thread-new"])
     created_threads: list[dict[str, str | None]] = field(default_factory=list)
     messages: list[tuple[str, str]] = field(default_factory=list)
 
@@ -150,7 +255,8 @@ class FakeDiscordContinuationClient:
         self.created_threads.append(
             {"parent_channel_id": parent_channel_id, "source_thread_id": source_thread_id, "name": name}
         )
-        return DiscordCreatedThread(thread_id="thread-new", name=name, url="https://discord.test/thread-new")
+        thread_id = self.thread_ids[len(self.created_threads) - 1]
+        return DiscordCreatedThread(thread_id=thread_id, name=name, url=f"https://discord.test/{thread_id}")
 
     def post_message(self, *, channel_id: str, content: str) -> None:
         self.messages.append((channel_id, content))

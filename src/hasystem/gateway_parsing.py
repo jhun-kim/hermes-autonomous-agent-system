@@ -14,7 +14,9 @@ class GatewayEventPayloadSource(Protocol):
     platform: str
     guild_id: str | None
     channel_id: str | None
+    channel_name: str | None
     thread_id: str | None
+    thread_name: str | None
     sender_id: str | None
     sender_display_name: str | None
     session_id: str | None
@@ -120,7 +122,9 @@ def event_payload(event: GatewayEventPayloadSource) -> JsonObject:
         "platform": event.platform,
         "guild_id": event.guild_id,
         "channel_id": event.channel_id,
+        "channel_name": event.channel_name,
         "thread_id": event.thread_id,
+        "thread_name": event.thread_name,
         "sender_id": event.sender_id,
         "sender_display_name": event.sender_display_name,
         "session_id": event.session_id,

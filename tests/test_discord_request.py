@@ -36,7 +36,9 @@ def test_parse_gateway_event_envelope_from_json_payload() -> None:
             "platform": "discord",
             "guild_id": "guild-1",
             "channel_id": "channel-1",
+            "channel_name": "planning",
             "thread_id": "thread-1",
+            "thread_name": "Issue 36 planning thread",
             "sender": {"id": "user-1", "display_name": "Chai"},
             "message": {"content": "Hermes, ship gateway routing"},
             "repo": "hasystem",
@@ -50,7 +52,9 @@ def test_parse_gateway_event_envelope_from_json_payload() -> None:
     assert event.platform == "discord"
     assert event.guild_id == "guild-1"
     assert event.channel_id == "channel-1"
+    assert event.channel_name == "planning"
     assert event.thread_id == "thread-1"
+    assert event.thread_name == "Issue 36 planning thread"
     assert event.sender_id == "user-1"
     assert event.sender_display_name == "Chai"
     assert event.raw_message == "Hermes, ship gateway routing"

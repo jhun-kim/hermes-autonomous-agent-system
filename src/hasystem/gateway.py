@@ -41,7 +41,9 @@ class DiscordGatewayEvent:
     platform: str = "discord"
     guild_id: str | None = None
     channel_id: str | None = None
+    channel_name: str | None = None
     thread_id: str | None = None
+    thread_name: str | None = None
     sender_id: str | None = None
     sender_display_name: str | None = None
     repo_hint: str | None = None
@@ -73,13 +75,17 @@ class DiscordGatewayEvent:
     def from_mapping(cls, data: dict[str, JsonValue]) -> "DiscordGatewayEvent":
         message = _event_message(data)
         sender = _json_object(data.get("sender")) or _json_object(data.get("author")) or {}
+        channel = _json_object(data.get("channel")) or {}
+        thread = _json_object(data.get("thread")) or {}
         event_type = _optional_str(data.get("event_type")) or _optional_str(data.get("type"))
         return cls(
             raw_message=message,
             platform=_optional_str(data.get("platform")) or "discord",
             guild_id=_optional_str(data.get("guild_id")),
             channel_id=_optional_str(data.get("channel_id")),
+            channel_name=_optional_str(data.get("channel_name")) or _optional_str(channel.get("name")),
             thread_id=_optional_str(data.get("thread_id")),
+            thread_name=_optional_str(data.get("thread_name")) or _optional_str(thread.get("name")),
             sender_id=_optional_str(data.get("sender_id")) or _optional_str(sender.get("id")),
             sender_display_name=(
                 _optional_str(data.get("sender_display_name"))
