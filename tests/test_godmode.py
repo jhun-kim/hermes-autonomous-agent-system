@@ -57,7 +57,8 @@ def test_godmode_requires_authorized_channel_or_sender(tmp_path: Path) -> None:
         build_gateway_response(service=service, event=event, dry_run_override=None, no_run_loop_override=None)
 
 
-def test_godmode_starts_selects_issue_marks_in_progress_and_records_evidence(tmp_path: Path) -> None:
+def test_godmode_starts_selects_issue_marks_in_progress_and_records_evidence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("hasystem.worker.shutil.which", lambda _binary: None)
     # Given: an authorized godmode channel and one ready issue.
     runner = RecordingCommandRunner([CommandResult(stdout="", stderr="", returncode=0)])
     github = ReadyIssueClient(GitHubIssue(number=12, title="Ship loop", body="Do it", labels=["ai:ready", "priority:p2"]))

@@ -214,7 +214,8 @@ def test_parse_discord_request_requires_repo_and_task() -> None:
 
 
 
-def test_discord_automation_intakes_issue_and_launches_worker(tmp_path: Path) -> None:
+def test_discord_automation_intakes_issue_and_launches_worker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("hasystem.worker.shutil.which", lambda _binary: None)
     issue_json = json.dumps(
         [
             {
