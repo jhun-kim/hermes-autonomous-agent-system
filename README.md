@@ -20,6 +20,10 @@ When continuing this repo to the next stage, register the intended work as a Git
 
 This rule is also recorded in `AGENTS.md` so future coding agents see it before making changes.
 
+## Continuous integration
+
+GitHub Actions runs the pytest suite on pushes to `main` and on pull requests using Python 3.11. The CI command is the same local verification command used below: `python3 -m pytest -q`.
+
 ## Quick start
 
 ```bash
