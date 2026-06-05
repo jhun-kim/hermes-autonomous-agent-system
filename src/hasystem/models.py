@@ -60,3 +60,16 @@ class LoopState:
 
     def is_active(self) -> bool:
         return self.phase in ACTIVE_PHASES
+
+    def with_approval(self, approval: ApprovalState) -> "LoopState":
+        return LoopState(
+            loop_id=self.loop_id,
+            repo=self.repo,
+            issue=self.issue,
+            branch=self.branch,
+            executor=self.executor,
+            phase=self.phase,
+            approval=approval,
+            created_at=self.created_at,
+            updated_at=self.updated_at,
+        )
