@@ -1,6 +1,6 @@
 name: hasystem-gateway-intake
 version: 0.1.0
-description: "Route explicit Discord hasystem/GODMODE commands through the hasystem gateway adapter before normal Hermes dispatch."
+description: "Route configured Discord thread messages through the hasystem gateway adapter before normal Hermes dispatch."
 author: "Hermes Autonomous Agent System"
 hooks:
   - pre_gateway_dispatch
