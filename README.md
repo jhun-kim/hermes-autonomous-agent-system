@@ -161,14 +161,22 @@ Use this checklist before pointing a production Hermes Discord gateway at
    directory `~/.hermes/plugins/hasystem-gateway-intake/`, add
    `hasystem-gateway-intake` to `plugins.enabled`, and restart the gateway.
    Hermes invokes the plugin via `pre_gateway_dispatch` before auth/pairing and
-   ordinary agent dispatch. The plugin only intercepts explicit routing commands
-   so ordinary chat still reaches Hermes unchanged:
+   ordinary agent dispatch. For configured parent channels, ordinary human
+   Discord thread messages route to hasystem by default. Users only need an
+   explicit prefix for controls or escape hatches:
    - exact `godmode`, `godmode status`, `godmode pause`, `godmode resume`, or
      `godmode stop` controls;
-   - `/hasystem ...`, `!hasystem ...`, `@hasystem ...`, or `hasystem ...`.
+   - `/hasystem ...`, `!hasystem ...`, `@hasystem ...`, or `hasystem ...`;
+   - `/hermes ...` or `@hermes ...` to bypass hasystem and let normal Hermes
+     dispatch handle the message.
 
-   Configure the live adapter command and parent-channel guardrail in the
-   gateway environment or launchd service:
+   Configure the live adapter command in the gateway environment or launchd
+   service. Auto-routing is fail-closed: it only applies when the source
+   channel/thread matches `HASYSTEM_GATEWAY_PARENT_CHANNEL_IDS`; if that env var
+   is unset, the plugin reads the deployed router JSON from
+   `HERMES_GATEWAY_ROUTER_CONFIG` or
+   `~/.hermes/hasystem-gateway-runtime/hermes-router.json` and uses its
+   `channel_default_repos`/`godmode.authorized_channel_ids` entries.
 
    ```bash
    export HASYSTEM_GATEWAY_ADAPTER_COMMAND="$HOME/.hermes/hasystem-gateway-runtime/hasystem-gateway-wrapper --live"
@@ -177,7 +185,7 @@ Use this checklist before pointing a production Hermes Discord gateway at
 
    For a Discord thread message, the plugin builds the adapter envelope with
    `guild_id`, parent `channel_id`, `thread_id`/`thread_name`, sender metadata,
-   message id, and stripped command content, then returns
+   message id, and routed content, then returns
    `{ "action": "skip" }` from `pre_gateway_dispatch` after scheduling the
    adapter response back to the same Discord thread. Keep `allow_repos` in the
    router JSON; the wrapper's live mode remains fail-closed.

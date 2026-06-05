@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -74,11 +75,49 @@ def test_hasystem_prefix_strips_routing_command(monkeypatch):
     assert prepared.event["content"] == "repo status 확인"
 
 
-def test_ordinary_discord_message_is_not_intercepted(monkeypatch):
+def test_ordinary_discord_message_in_allowed_thread_auto_routes_to_hasystem(monkeypatch):
     plugin = load_plugin()
+    monkeypatch.setenv("HASYSTEM_GATEWAY_PARENT_CHANNEL_IDS", "1478650642854580434")
+    monkeypatch.setenv("HASYSTEM_GATEWAY_ADAPTER_COMMAND", "/tmp/hasystem-wrapper --live")
+
+    prepared = plugin.prepare_dispatch(discord_thread_event("그냥 일반 대화"))
+
+    assert prepared is not None
+    assert prepared.event["content"] == "그냥 일반 대화"
+
+
+def test_router_config_parent_channel_enables_auto_routing(tmp_path, monkeypatch):
+    plugin = load_plugin()
+    router_config = tmp_path / "router.json"
+    router_config.write_text(
+        json.dumps({"channel_default_repos": {"1478650642854580434": "jhun-kim/hermes-autonomous-agent-system"}}),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("HASYSTEM_GATEWAY_PARENT_CHANNEL_IDS", raising=False)
+    monkeypatch.setenv("HERMES_GATEWAY_ROUTER_CONFIG", str(router_config))
+    monkeypatch.setenv("HASYSTEM_GATEWAY_ADAPTER_COMMAND", "/tmp/hasystem-wrapper --live")
+
+    prepared = plugin.prepare_dispatch(discord_thread_event("작업해"))
+
+    assert prepared is not None
+    assert prepared.event["content"] == "작업해"
+
+
+def test_ordinary_discord_message_outside_allowed_parent_is_not_intercepted(monkeypatch):
+    plugin = load_plugin()
+    monkeypatch.setenv("HASYSTEM_GATEWAY_PARENT_CHANNEL_IDS", "some-other-channel")
     monkeypatch.setenv("HASYSTEM_GATEWAY_ADAPTER_COMMAND", "/tmp/hasystem-wrapper --live")
 
     assert plugin.prepare_dispatch(discord_thread_event("그냥 일반 대화")) is None
+
+
+def test_hermes_escape_prefix_bypasses_auto_routing(monkeypatch):
+    plugin = load_plugin()
+    monkeypatch.setenv("HASYSTEM_GATEWAY_PARENT_CHANNEL_IDS", "1478650642854580434")
+    monkeypatch.setenv("HASYSTEM_GATEWAY_ADAPTER_COMMAND", "/tmp/hasystem-wrapper --live")
+
+    assert plugin.prepare_dispatch(discord_thread_event("/hermes 그냥 Hermes로 답해줘")) is None
+    assert plugin.prepare_dispatch(discord_thread_event("@hermes 그냥 Hermes로 답해줘")) is None
 
 
 def test_channel_allow_list_is_fail_closed(monkeypatch):

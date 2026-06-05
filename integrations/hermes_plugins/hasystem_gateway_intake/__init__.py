@@ -1,4 +1,4 @@
-"""Hermes plugin: route explicit Discord hasystem/GODMODE requests to hasystem.
+"""Hermes plugin: route configured Discord thread requests to hasystem.
 
 Install this directory as ``~/.hermes/plugins/hasystem-gateway-intake`` and add
 ``hasystem-gateway-intake`` to ``plugins.enabled``. Hermes calls this plugin via
@@ -15,10 +15,12 @@ import re
 import shlex
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 _TRIGGER_PREFIX_RE = re.compile(r"^(?:/|!|@)?hasystem(?:\s+|$)", re.IGNORECASE)
 _GODMODE_RE = re.compile(r"^/?godmode(?:\s+(?:status|pause|resume|stop))?$", re.IGNORECASE)
+_HERMES_ESCAPE_RE = re.compile(r"^(?:/|@)hermes(?:\s+|$)", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -55,11 +57,12 @@ def prepare_dispatch(event: Any) -> PreparedDispatch | None:
     if _source_is_bot(source):
         return None
 
-    raw_text = str(getattr(event, "text", "") or "").strip()
-    content = _routed_content(raw_text)
-    if content is None:
-        return None
     if not _channel_allowed(source):
+        return None
+
+    raw_text = str(getattr(event, "text", "") or "").strip()
+    content = _routed_content(raw_text, source=source)
+    if content is None:
         return None
 
     command = _adapter_command()
@@ -96,16 +99,59 @@ def _source_channel_ids(source: Any) -> set[str]:
     return {str(value).strip() for value in values if str(value or "").strip()}
 
 
-def _routed_content(raw_text: str) -> str | None:
+def _routed_content(raw_text: str, *, source: Any) -> str | None:
     if not raw_text:
+        return None
+    if _HERMES_ESCAPE_RE.match(raw_text):
         return None
     if _GODMODE_RE.match(raw_text):
         return raw_text.lstrip("/").strip()
     match = _TRIGGER_PREFIX_RE.match(raw_text)
-    if not match:
-        return None
-    remainder = raw_text[match.end():].strip()
-    return remainder or "godmode status"
+    if match:
+        remainder = raw_text[match.end():].strip()
+        return remainder or "godmode status"
+    if _auto_route_enabled_for_source(source):
+        # Preserve slash/bang commands for Hermes unless they are explicit
+        # hasystem/GODMODE controls above.
+        if raw_text.startswith(("/", "!")):
+            return None
+        return raw_text
+    return None
+
+
+def _auto_route_enabled_for_source(source: Any) -> bool:
+    configured = _auto_route_channel_ids()
+    if not configured:
+        return False
+    return bool(_source_channel_ids(source) & configured)
+
+
+def _auto_route_channel_ids() -> set[str]:
+    configured_env = os.environ.get("HASYSTEM_GATEWAY_PARENT_CHANNEL_IDS", "").strip()
+    if configured_env:
+        return _csv_env("HASYSTEM_GATEWAY_PARENT_CHANNEL_IDS")
+
+    router_path = Path(
+        os.environ.get(
+            "HERMES_GATEWAY_ROUTER_CONFIG",
+            os.path.expanduser("~/.hermes/hasystem-gateway-runtime/hermes-router.json"),
+        )
+    )
+    try:
+        data = json.loads(router_path.read_text(encoding="utf-8"))
+    except Exception:
+        return set()
+
+    ids: set[str] = set()
+    channel_defaults = data.get("channel_default_repos", {})
+    if isinstance(channel_defaults, dict):
+        ids.update(str(key).strip() for key in channel_defaults if str(key).strip())
+    godmode = data.get("godmode", {})
+    if isinstance(godmode, dict):
+        authorized = godmode.get("authorized_channel_ids", [])
+        if isinstance(authorized, list):
+            ids.update(str(value).strip() for value in authorized if str(value).strip())
+    return ids
 
 
 def _event_envelope(*, event: Any, source: Any, content: str) -> dict[str, Any]:
