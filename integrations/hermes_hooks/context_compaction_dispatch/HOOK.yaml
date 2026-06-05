@@ -1,0 +1,4 @@
+name: hasystem-context-compaction-dispatch
+description: Dispatch live Hermes context-compression lifecycle events into hasystem.
+events:
+  - gateway:startup
