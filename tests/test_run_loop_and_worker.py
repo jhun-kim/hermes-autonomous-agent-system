@@ -26,8 +26,10 @@ def test_codex_worker_launcher_builds_target_repo_command(tmp_path: Path) -> Non
     assert "Labels: ai:ready" in command.stdin_text
     assert "issue-first agent workflow" in command.stdin_text
     assert "Run inside the cmux workspace/surface assigned to this Discord thread" in command.stdin_text
-    assert "ULW as the optional execution discipline" in command.stdin_text
-    assert "do not use OmO/OmX as the terminal/session orchestration mechanism" in command.stdin_text
+    assert "ten additive terminal surfaces" in command.stdin_text
+    assert "Use Codex CLI in each surface" in command.stdin_text
+    assert "especially ULW" in command.stdin_text
+    assert "Do not replace cmux as the workspace/surface orchestration mechanism" in command.stdin_text
     assert "issue first, code second" in command.stdin_text
     assert "confirm the selected GitHub issue" in command.stdin_text
 
@@ -48,8 +50,8 @@ def test_omx_worker_launcher_builds_non_interactive_exec_command(tmp_path: Path)
     assert "Issue #6: Add OmX exec mode" in command.args[-1]
     assert "Labels: ai:ready, executor:omx" in command.args[-1]
     assert "issue first, code second" in command.args[-1]
-    assert "ULW as the optional execution discipline" in command.args[-1]
-    assert "do not use OmO/OmX as the terminal/session orchestration mechanism" in command.args[-1]
+    assert "especially ULW" in command.args[-1]
+    assert "Do not replace cmux as the workspace/surface orchestration mechanism" in command.args[-1]
 
 
 def test_cmux_launcher_uses_current_workspace_surface_without_focus_switch(tmp_path: Path) -> None:
@@ -141,6 +143,66 @@ def test_cmux_launcher_distributes_parallel_workers_as_surfaces_in_same_discord_
     assert "omx exec --full-auto" in omx_script
     assert codex_script.count("new-surface") == 1
     assert omx_script.count("new-surface") == 1
+
+
+def test_parallel_surface_plan_defaults_to_ten_codex_worktrees_and_branches(tmp_path: Path) -> None:
+    # Given: a Discord issue that should fan out into the standard 10 cmux surfaces.
+    repo_path = tmp_path / "repo"
+    issue = GitHubIssue(number=51, title="Ten surfaces", body="Parallelize", labels=["ai:ready"])
+    launcher = CodexWorkerLauncher(cmux_binary="cmux")
+
+    # When: the launcher builds the standard parallel plan.
+    plan = launcher.build_parallel_surface_plan(
+        repo_path=repo_path,
+        repo="owner/repo",
+        issue=issue,
+        base_branch="ai/issue-51-ten-surfaces",
+    )
+
+    # Then: exactly ten isolated worktrees/branches are prepared, each running Codex CLI.
+    assert len(plan) == 10
+    assert plan[0].index == 1
+    assert plan[-1].index == 10
+    assert plan[0].total == 10
+    assert plan[0].branch == "ai/issue-51-ten-surfaces/surface-01"
+    assert plan[-1].branch == "ai/issue-51-ten-surfaces/surface-10"
+    assert plan[0].worktree_path == tmp_path / "repo-issue-51-surface-01"
+    assert plan[-1].worktree_path == tmp_path / "repo-issue-51-surface-10"
+    assert plan[0].setup_command.args == (
+        "git",
+        "worktree",
+        "add",
+        "-B",
+        "ai/issue-51-ten-surfaces/surface-01",
+        str(tmp_path / "repo-issue-51-surface-01"),
+        "HEAD",
+    )
+    assert all(item.worker_command.args == ("codex", ".") for item in plan)
+    assert "Parallel surface: 01/10" in plan[0].worker_command.stdin_text
+    assert "branch ai/issue-51-ten-surfaces/surface-10" in plan[-1].worker_command.stdin_text
+    assert "OmX/OmO skills/workflows" in plan[0].worker_command.stdin_text
+
+
+def test_parallel_surface_plan_can_use_custom_count_and_base_ref(tmp_path: Path) -> None:
+    # Given: a smaller plan requested by a caller or test harness.
+    repo_path = tmp_path / "repo"
+    issue = GitHubIssue(number=52, title="Custom plan", body="Parallelize", labels=["ai:ready"])
+    launcher = CodexWorkerLauncher(cmux_binary="cmux")
+
+    # When: the caller overrides the surface count and base ref.
+    plan = launcher.build_parallel_surface_plan(
+        repo_path=repo_path,
+        repo="owner/repo",
+        issue=issue,
+        base_branch="ai/issue-52-custom-plan",
+        surface_count=3,
+        base_ref="origin/main",
+    )
+
+    # Then: each worktree branch is based from the requested ref.
+    assert len(plan) == 3
+    assert plan[2].setup_command.args[-1] == "origin/main"
+    assert "Parallel surface: 03/03" in plan[2].worker_command.stdin_text
 
 
 def test_omo_worker_launcher_builds_surface_engine_command(tmp_path: Path) -> None:
