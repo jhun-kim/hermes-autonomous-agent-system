@@ -2,12 +2,21 @@
 
 [![CI](https://github.com/jhun-kim/hermes-autonomous-agent-system/actions/workflows/ci.yml/badge.svg)](https://github.com/jhun-kim/hermes-autonomous-agent-system/actions/workflows/ci.yml)
 
-Markdown harness engineering for human-governed autonomous coding workspaces. The repository's user-facing logic lives in editable `.md` harnesses, policies, templates, and examples; Python remains the lightweight glue that validates those files and transports them into Hermes/GitHub/Discord/cmux execution.
+Markdown harness engineering for a macOS cmux multi-agent workspace. The repository's center is one Discord thread mapped to one cmux workspace, with visible Codex/OmX/OmO worker surfaces operating GitHub issues from Markdown harnesses. Python remains the lightweight glue that validates those files and transports them into Hermes/GitHub/Discord/cmux execution.
 
-The core promise is: **users change agent behavior by editing Markdown, not Python.** Start with [`harnesses/issue-loop.md`](harnesses/issue-loop.md), then adjust the policies in [`policies/`](policies/) and reusable prompts in [`templates/`](templates/).
+The canonical thread workspace is documented in [`docs/THREAD_CMUX_WORKSPACE.md`](docs/THREAD_CMUX_WORKSPACE.md):
+
+```text
+Guild ID: 1478650515888934932
+Parent Channel ID: 1478650642854580434
+Thread ID: 1512679333611700224
+```
+
+The core promise is: **users operate multi-agent coding by editing Markdown and watching cmux surfaces, not by editing Python.** Start with [`docs/THREAD_CMUX_WORKSPACE.md`](docs/THREAD_CMUX_WORKSPACE.md), then run [`harnesses/issue-loop.md`](harnesses/issue-loop.md) and adjust the policies in [`policies/`](policies/) plus reusable prompts in [`templates/`](templates/).
 
 Markdown harness map:
 
+- [`docs/THREAD_CMUX_WORKSPACE.md`](docs/THREAD_CMUX_WORKSPACE.md) — central macOS cmux multi-agent workspace report for Discord thread `1512679333611700224`.
 - [`harnesses/issue-loop.md`](harnesses/issue-loop.md) — one bounded issue from selection through PR handoff and follow-up issue creation.
 - [`policies/issue-first.md`](policies/issue-first.md) — every repo-changing task starts with a confirmed GitHub issue.
 - [`policies/cmux-first.md`](policies/cmux-first.md) — one Discord thread maps to one cmux workspace with visible worker surfaces.

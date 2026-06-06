@@ -1,6 +1,6 @@
 # Platform Setup Guide
 
-This is a user guide for choosing the workspace layer before running the Markdown harnesses.
+This is a user guide for choosing the workspace layer before running the Markdown harnesses. The central path for this repository is macOS cmux using the Discord thread workspace in [`THREAD_CMUX_WORKSPACE.md`](THREAD_CMUX_WORKSPACE.md); Windows terminal Codex remains a secondary fallback path.
 
 ## macOS: cmux by default
 

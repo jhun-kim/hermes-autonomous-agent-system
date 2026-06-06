@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Run one bounded GitHub issue from selection to verified completion, then create the next concrete follow-up issue. The harness is written in Markdown so an operator can change the agent workflow without editing Python.
+Run one bounded GitHub issue from selection to verified completion inside a Discord-thread cmux multi-agent workspace, then create the next concrete follow-up issue. The harness is written in Markdown so an operator can change the agent workflow without editing Python.
 
 ## Inputs
 
@@ -10,11 +10,12 @@ Run one bounded GitHub issue from selection to verified completion, then create 
 - `repo_path`: local checkout path, normally `~/Documents/GitHub/<name>`.
 - `issue_number`: optional explicit issue number. If omitted, select an eligible `ai:ready` issue.
 - `discord_thread_id` and `discord_thread_name`: used to derive the cmux workspace boundary.
+- Canonical macOS thread workspace: Guild `1478650515888934932`, parent channel `1478650642854580434`, thread `1512679333611700224`.
 - `executor`: `codex`, `lazycodex`, `omx`, or `omo`; cmux remains the workspace layer.
 
 ## Required Workspace
 
-- Treat one Discord thread as one cmux workspace.
+- Treat one Discord thread as one cmux workspace; the central example is `hasystem-thread-1512679333611700224`.
 - On macOS, cmux is the default workspace layer; if cmux is missing, guide the user through cmux installation before starting repository-changing work.
 - On Windows, do not require cmux; use a normal terminal environment with Codex CLI as the visible worker surface.
 - On Linux or unknown platforms, prefer cmux when available and otherwise use a visible terminal Codex fallback while reporting the chosen mode.
@@ -23,6 +24,7 @@ Run one bounded GitHub issue from selection to verified completion, then create 
 - Run Codex CLI visibly inside the relevant cmux surface when claiming Codex execution.
 - In Windows terminal fallback mode, run Codex visibly in the terminal and preserve command/log evidence just like a cmux surface.
 - Use per-surface branches/worktrees when more than one worker edits files.
+- Follow `docs/THREAD_CMUX_WORKSPACE.md` for the macOS surface roles, commands, and verification checklist.
 
 ## Steps
 
