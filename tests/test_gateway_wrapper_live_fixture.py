@@ -41,6 +41,7 @@ def test_gateway_wrapper_live_mode_uses_config_allow_list_without_allow_any(tmp_
     assert invocation["has_dry_run"] is False
     assert invocation["has_allow_any_repo"] is False
     assert invocation["config"].endswith("examples/hermes-router.json")
+    assert invocation["state_db"].endswith("state.db")
     assert not (tmp_path / "real-mutation-marker").exists()
 
 
@@ -106,6 +107,34 @@ def test_gateway_wrapper_live_mode_accepts_explicit_allow_repo_override(tmp_path
     assert not (tmp_path / "real-mutation-marker").exists()
 
 
+def test_gateway_wrapper_live_mode_passes_configured_state_db(tmp_path: Path) -> None:
+    fake_adapter = _write_fake_gateway_adapter(tmp_path)
+    configured_state_db = tmp_path / "canonical-state.db"
+    env = _wrapper_env(tmp_path, fake_adapter)
+    env["HASYSTEM_STATE_DB"] = str(configured_state_db)
+    event = json.dumps(
+        {
+            "platform": "discord",
+            "channel_id": "1512060115757432833",
+            "content": "Hermes, hasystem add live wrapper fixture",
+            "dry_run": False,
+        }
+    )
+
+    result = subprocess.run(
+        ["scripts/hermes-gateway-wrapper", "--live", "--event-json", event],
+        cwd=Path.cwd(),
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    invocation = json.loads((tmp_path / "adapter-invocation.json").read_text(encoding="utf-8"))
+    assert invocation["state_db"] == str(configured_state_db)
+
+
 def _wrapper_env(tmp_path: Path, fake_adapter: Path) -> dict[str, str]:
     env = os.environ.copy()
     env["PATH"] = f"{fake_adapter.parent}{os.pathsep}{env['PATH']}"
@@ -129,6 +158,7 @@ from pathlib import Path
 
 args = sys.argv[1:]
 config_path = args[args.index("--config") + 1]
+state_db = args[args.index("--state-db") + 1] if "--state-db" in args else None
 event_json = args[args.index("--event-json") + 1] if "--event-json" in args else sys.stdin.read()
 config = json.loads(Path(config_path).read_text(encoding="utf-8"))
 event = json.loads(event_json)
@@ -147,6 +177,7 @@ has_allow_any_repo = "--allow-any-repo" in args
 record = {
     "args": args,
     "config": config_path,
+    "state_db": state_db,
     "has_dry_run": "--dry-run" in args,
     "has_allow_any_repo": has_allow_any_repo,
 }
