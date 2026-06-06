@@ -7,18 +7,19 @@ set -euo pipefail
 # trying it locally from a source checkout.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG="${HERMES_GATEWAY_ROUTER_CONFIG:-$SCRIPT_DIR/../examples/hermes-router.json}"
+STATE_DB="${HASYSTEM_STATE_DB:-${HERMES_HOME:-$HOME/.hermes}/state.db}"
 MODE="${1:---dry-run}"
 if [[ "$MODE" == "--dry-run" ]]; then
   shift || true
-  exec hermes-gateway-adapter --config "$CONFIG" --dry-run "$@"
+  exec hermes-gateway-adapter --config "$CONFIG" --state-db "$STATE_DB" --dry-run "$@"
 elif [[ "$MODE" == "--live" ]]; then
   shift || true
   # Live mode intentionally does not pass --allow-any-repo. Non-dry-run calls
   # therefore fail closed unless the config's allow_repos list or explicit
   # --allow-repo arguments permit the selected repository.
-  exec hermes-gateway-adapter --config "$CONFIG" "$@"
+  exec hermes-gateway-adapter --config "$CONFIG" --state-db "$STATE_DB" "$@"
 else
   # Safe default: unknown first arguments are treated as adapter arguments, but
   # the wrapper still forces dry-run routing.
-  exec hermes-gateway-adapter --config "$CONFIG" --dry-run "$@"
+  exec hermes-gateway-adapter --config "$CONFIG" --state-db "$STATE_DB" --dry-run "$@"
 fi

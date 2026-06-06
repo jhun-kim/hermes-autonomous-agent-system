@@ -15,7 +15,6 @@ import re
 import shlex
 import subprocess
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 _TRIGGER_PREFIX_RE = re.compile(r"^(?:/|!|@)?hasystem(?:\s+|$)", re.IGNORECASE)
@@ -127,31 +126,13 @@ def _auto_route_enabled_for_source(source: Any) -> bool:
 
 
 def _auto_route_channel_ids() -> set[str]:
-    configured_env = os.environ.get("HASYSTEM_GATEWAY_PARENT_CHANNEL_IDS", "").strip()
-    if configured_env:
-        return _csv_env("HASYSTEM_GATEWAY_PARENT_CHANNEL_IDS")
-
-    router_path = Path(
-        os.environ.get(
-            "HERMES_GATEWAY_ROUTER_CONFIG",
-            os.path.expanduser("~/.hermes/hasystem-gateway-runtime/hermes-router.json"),
-        )
-    )
-    try:
-        data = json.loads(router_path.read_text(encoding="utf-8"))
-    except Exception:
-        return set()
-
-    ids: set[str] = set()
-    channel_defaults = data.get("channel_default_repos", {})
-    if isinstance(channel_defaults, dict):
-        ids.update(str(key).strip() for key in channel_defaults if str(key).strip())
-    godmode = data.get("godmode", {})
-    if isinstance(godmode, dict):
-        authorized = godmode.get("authorized_channel_ids", [])
-        if isinstance(authorized, list):
-            ids.update(str(value).strip() for value in authorized if str(value).strip())
-    return ids
+    # Do not infer automatic routing from router defaults or GODMODE authorization.
+    # Those settings are broad enough to cover parent channels and many child
+    # threads; treating them as auto-route allow-lists makes ordinary Discord
+    # messages create hasystem issues unexpectedly. Automatic routing is opt-in
+    # through a dedicated env var. Explicit `hasystem ...` and `godmode ...`
+    # commands still route through the adapter.
+    return _csv_env("HASYSTEM_GATEWAY_AUTO_ROUTE_CHANNEL_IDS")
 
 
 def _event_envelope(*, event: Any, source: Any, content: str) -> dict[str, Any]:
