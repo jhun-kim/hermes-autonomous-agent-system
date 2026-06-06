@@ -16,6 +16,7 @@ from hasystem.gateway import DiscordGatewayEvent, build_gateway_response, load_r
 from hasystem.github_client import DEFAULT_AI_LABELS, GitHubClient
 from hasystem.intake import IntakeService
 from hasystem.loop_runner import RunLoopService
+from hasystem.models import GitHubIssue, LoopState
 from hasystem.state_store import StateStore
 from hasystem.worker import CodexWorkerLauncher
 from hasystem.workspace import Workspace
@@ -260,6 +261,42 @@ def test_discord_automation_intakes_issue_and_launches_worker(tmp_path: Path, mo
     assert runner.stdin_values[-1] == result.loop.worker_command.stdin_text
     assert "issue-first agent workflow" in result.loop.worker_command.stdin_text
     assert "do not use OmO/OmX as the terminal/session orchestration mechanism" in result.loop.worker_command.stdin_text
+
+
+def test_discord_automation_reuses_active_loop_instead_of_creating_duplicate_issue(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("hasystem.worker.shutil.which", lambda _binary: None)
+    runner = RecordingCommandRunner([])
+    workspace = Workspace(tmp_path / "workspace", runner)
+    store = StateStore(tmp_path / "state.db")
+    active_issue = GitHubIssue(
+        number=59,
+        title="지금 쓰레드가 너무 많이 생겼는데, 문제 해결해",
+        body="지금 쓰레드가 너무 많이 생겼는데, 문제 해결해",
+        labels=["ai:in-progress", "executor:lazycodex", "priority:p2"],
+    )
+    active_loop = LoopState.start(repo="owner/repo", issue=active_issue, executor="lazycodex")
+    store.save_loop(active_loop)
+    service = DiscordAutomationService(
+        intake=IntakeService(workspace=workspace, runner=runner),
+        loop_runner=RunLoopService(
+            workspace=workspace,
+            store=store,
+            worker=CodexWorkerLauncher(runner=runner),
+            github_factory=lambda repo: GitHubClient(repo=repo, runner=runner),
+        ),
+        router_config=DiscordRequestRouterConfig(default_repo="owner/repo"),
+    )
+
+    result = service.handle("작업 계속해", thread_id="discord-thread-1")
+
+    assert result.intake is None
+    assert result.loop is not None
+    assert result.loop.existing_active is True
+    assert result.loop.loop.issue.number == 59
+    assert runner.commands == []
 
 
 def test_discord_automation_maps_thread_to_cmux_workspace_surface(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -8,6 +8,7 @@ from typing import Any, Final
 from .godmode import GodmodeAuthorizationError, GodmodeConfig, GodmodeContext, GodmodeResult, GodmodeService, parse_godmode_command
 from .intake import IntakeResult, IntakeService
 from .loop_runner import RunLoopResult, RunLoopService
+from .repo_spec import RepoSpec
 from .worker import WorkerLaunchContext
 
 JsonValue = Any
@@ -122,6 +123,22 @@ class DiscordAutomationService:
         if dry_run:
             return DiscordAutomationResult(request=request, intake=None, loop=None, dry_run=True)
 
+        if run_loop and self._has_active_loop(request.repo_raw):
+            loop_result = self.loop_runner.run_once(
+                repo_raw=request.repo_raw,
+                dry_run=False,
+                launch_context=WorkerLaunchContext(
+                    platform="discord",
+                    guild_id=guild_id,
+                    channel_id=channel_id,
+                    channel_name=channel_name,
+                    thread_id=thread_id,
+                    thread_name=thread_name,
+                    conversation_id=f"discord:{thread_id or channel_id or sender_id or 'unknown'}",
+                ),
+            )
+            return DiscordAutomationResult(request=request, intake=None, loop=loop_result, dry_run=False)
+
         intake_result = self.intake.create_task(repo_raw=request.repo_raw, request_text=request.request_text)
         loop_result = (
             self.loop_runner.run_once(
@@ -141,6 +158,10 @@ class DiscordAutomationService:
             else None
         )
         return DiscordAutomationResult(request=request, intake=intake_result, loop=loop_result, dry_run=False)
+
+    def _has_active_loop(self, repo_raw: str) -> bool:
+        repo = RepoSpec.parse(repo_raw)
+        return self.loop_runner.store.get_active_loop(repo.full_name) is not None
 
 
 def parse_discord_request(
