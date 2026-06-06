@@ -20,6 +20,15 @@ Exceptions:
 - Emergency cleanup of accidental local artifacts may be done before issue creation.
 - If GitHub issue creation is unavailable, stop and report the blocker instead of silently editing code.
 
+## Korean beginner installation documentation
+
+When changing installation, onboarding, gateway setup, or user-facing CLI behavior, keep the Korean beginner path current:
+
+1. `README.md` must show where a non-coder starts and include the LLM copy/paste installation prompt or a direct link to it.
+2. `docs/INSTALL_KO.md` must explain the selectable installation paths in Korean: general user install, developer install, Hermes/Discord dry-run validation, and LLM-guided terminal flow.
+3. The `hasystem-install-ko` / `python3 -m hasystem.commands.install_ko` helper must default to safe dry-run output and must not run live gateway or GitHub mutations unless the user explicitly chooses execution.
+4. Any new Markdown file should have a clear role: user guide, operator guide, developer rule, or verification note. Do not let stale `.md` files contradict the cmux-first and issue-first workflow.
+
 ## cmux worker workspace/surface workflow
 
 When launching or instructing coding workers for repository tasks, use cmux as the session manager:

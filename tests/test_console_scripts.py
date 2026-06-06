@@ -48,6 +48,63 @@ def test_hermes_gateway_adapter_console_script_entrypoint_exists() -> None:
     assert scripts["hermes-gateway-adapter"].strip('"') == "hasystem.commands.gateway_adapter:main"
 
 
+def test_hasystem_install_ko_console_script_entrypoint_exists() -> None:
+    # Given: the project package metadata.
+    pyproject = ConfigParser()
+    pyproject.read(Path("pyproject.toml"))
+
+    # When: console scripts are inspected.
+    scripts = pyproject["project.scripts"]
+
+    # Then: hasystem-install-ko points at the Korean beginner installer helper.
+    assert scripts["hasystem-install-ko"].strip('"') == "hasystem.commands.install_ko:main"
+
+
+def test_korean_installer_module_prints_beginner_menu() -> None:
+    # Given: the Korean installer module CLI entrypoint.
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path("src").resolve())
+
+    # When: the installer helper is invoked in its default dry-run menu mode.
+    result = subprocess.run(
+        [sys.executable, "-m", "hasystem.commands.install_ko", "--dry-run"],
+        cwd=Path.cwd(),
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    # Then: it prints Korean choices without executing installation commands.
+    assert result.returncode == 0, result.stderr
+    assert "HASYSTEM 한국어 설치 도우미" in result.stdout
+    assert "설치 선택지" in result.stdout
+    assert "일반 사용자 설치" in result.stdout
+    assert "Hermes Discord gateway dry-run" in result.stdout
+
+
+def test_korean_installer_choice_plan_keeps_live_gateway_disabled_by_default() -> None:
+    # Given: a specific gateway validation choice.
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path("src").resolve())
+
+    # When: the installer prints the dry-run plan for gateway validation.
+    result = subprocess.run(
+        [sys.executable, "-m", "hasystem.commands.install_ko", "--choice", "3", "--dry-run"],
+        cwd=Path.cwd(),
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    # Then: the plan documents dry-run routing and explicitly warns against live execution first.
+    assert result.returncode == 0, result.stderr
+    assert "Discord 이벤트 라우팅만 확인" in result.stdout
+    assert "--dry-run" in result.stdout
+    assert "dry-run이 통과하기 전에는 --live를 사용하지 마세요" in result.stdout
+
+
 def test_gateway_adapter_module_accepts_event_json_and_prints_structured_dry_run(tmp_path: Path) -> None:
     # Given: a Discord/Gateway event JSON payload and isolated state/workspace paths.
     env = os.environ.copy()

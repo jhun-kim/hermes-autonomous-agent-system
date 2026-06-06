@@ -16,6 +16,44 @@ Current scope:
 
 External commands go through a subprocess runner abstraction so tests can fake `git`, `gh`, `codex`, and `cmux`.
 
+## 한국어 초보자 설치 / Korean beginner install
+
+코딩을 전혀 모르는 사용자는 여기서 시작하세요:
+
+1. GitHub에서 이 저장소를 다운로드하거나 clone 합니다.
+2. LLM/에이전트에게 아래 프롬프트를 그대로 붙여넣습니다.
+3. LLM이 터미널을 열고 OS/Python/Git 상태를 확인한 뒤, 한국어 설치 선택지를 보여주게 합니다.
+4. 처음에는 반드시 `--dry-run`으로 명령 목록만 확인합니다.
+
+LLM에게 붙여넣는 설치 시작 프롬프트:
+
+```text
+나는 코딩을 잘 모르는 일반 사용자입니다.
+GitHub 저장소 jhun-kim/hermes-autonomous-agent-system 을 내 컴퓨터에 설치하고 싶습니다.
+
+내 컴퓨터의 터미널을 열어 설치를 도와주세요.
+먼저 운영체제, Python 3.10 이상 여부, Git 설치 여부를 확인하고,
+위험한 명령은 실행 전에 한국어로 설명하고 확인을 받아주세요.
+저장소 폴더에서 다음 명령으로 한국어 설치 선택지를 보여주세요.
+
+python3 -m hasystem.commands.install_ko --dry-run
+
+처음에는 live 실행을 하지 말고 dry-run/help 확인만 진행해주세요.
+```
+
+저장소 폴더에서 직접 실행할 수도 있습니다. `python3 --version`이 3.10보다 낮으면
+`python3.11` 또는 `python3.10`으로 바꿔 실행하세요:
+
+```bash
+python3 -m hasystem.commands.install_ko --dry-run
+python3 -m hasystem.commands.install_ko --choice 1 --dry-run  # 일반 사용자 설치 계획
+python3 -m hasystem.commands.install_ko --choice 2 --dry-run  # 개발자 설치 계획
+python3 -m hasystem.commands.install_ko --choice 3 --dry-run  # Gateway dry-run 점검
+```
+
+자세한 한국어 안내는 [`docs/INSTALL_KO.md`](docs/INSTALL_KO.md)를 보세요.
+패키지 설치 후에는 `hasystem-install-ko --dry-run` 콘솔 명령도 사용할 수 있습니다.
+
 ## Worker surfaces: cmux first
 
 Repository coding work is orchestrated through [cmux](https://github.com/manaflow-ai/cmux) workspace and surface primitives when cmux is installed:
@@ -41,6 +79,14 @@ This rule is also recorded in `AGENTS.md` so future coding agents see it before 
 GitHub Actions runs the pytest suite on pushes to `main` and on pull requests using Python 3.11. The CI command is the same local verification command used below: `python3 -m pytest -q`.
 
 ## Quick start
+
+For Korean beginner installation help, start with:
+
+```bash
+python3 -m hasystem.commands.install_ko --dry-run
+```
+
+For developer verification:
 
 ```bash
 python3 -m pytest -q
