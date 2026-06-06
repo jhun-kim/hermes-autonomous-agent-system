@@ -27,8 +27,13 @@ Repository coding work is orchestrated through [cmux](https://github.com/manaflo
 - Branch isolation is mandatory for parallel surfaces. Use per-surface git worktrees and branches such as `ai/issue-51-topic/surface-01` through `surface-10`, then merge/combine verified branches into an integration branch before pushing and opening PR work.
 - If no Discord context or caller workspace is available, the launcher creates one cmux workspace rooted at the target repository with `cmux new-workspace --cwd <repo> --command <worker> --focus false`.
 - Worker launches are additive and focus-neutral. Do not select other workspaces, focus panes, open unbounded Terminal.app windows, or create unrelated cmux workspaces for parallel coding work.
-- `executor:lazycodex`/`executor:codex`, `executor:omx`, and `executor:omo` select the worker engine/prompt shape. They do not select the terminal/session manager; cmux owns that layer.
-- Headless CI/tests can disable cmux preference or run dry-run mode to avoid live cmux socket access.
+- `executor:lazycodex`/`executor:codex`, `executor:omx`, and `executor:omo` select the worker engine/prompt shape. They do not select the terminal/session manager; cmux owns that layer by default.
+- Operators can override the worker terminal/session manager with `HASYSTEM_WORKER_TERMINAL`:
+  - `auto` or unset: use cmux when installed; otherwise use the direct/headless runner fallback.
+  - `cmux`: require cmux and fail closed if the `cmux` binary is unavailable.
+  - `terminal`/`Terminal.app`/`osascript`: launch workers in macOS Terminal.app even when cmux is installed.
+  - `direct`/`headless`: run the worker command directly through the command runner without cmux or Terminal.app.
+- Headless CI/tests can set `HASYSTEM_WORKER_TERMINAL=direct`, disable cmux preference, or run dry-run mode to avoid live cmux socket access.
 
 ## Operating rule: issue first, code second
 

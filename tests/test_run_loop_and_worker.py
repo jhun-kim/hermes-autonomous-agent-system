@@ -6,7 +6,7 @@ from hasystem.command_runner import CommandResult, RecordingCommandRunner
 from hasystem.loop_runner import RunLoopService
 from hasystem.models import GitHubIssue, LoopState
 from hasystem.state_store import StateStore
-from hasystem.worker import CodexWorkerLauncher, WorkerLaunchContext
+from hasystem.worker import CodexWorkerLauncher, WorkerLaunchContext, resolve_worker_terminal_mode
 from hasystem.workspace import Workspace
 
 
@@ -219,18 +219,45 @@ def test_omo_worker_launcher_builds_surface_engine_command(tmp_path: Path) -> No
     assert "Issue #42: Run with OmO" in command.args[-1]
 
 
-def test_launcher_falls_back_to_direct_runner_when_cmux_disabled(tmp_path: Path) -> None:
-    # Given: cmux preference is disabled for a headless/test launch.
+def test_launcher_falls_back_to_direct_runner_when_cmux_missing(tmp_path: Path, monkeypatch) -> None:
+    # Given: cmux preference is enabled, but the host has no cmux binary.
     runner = RecordingCommandRunner([CommandResult(stdout="", stderr="", returncode=0)])
-    launcher = CodexWorkerLauncher(runner=runner, prefer_cmux=False)
+    launcher = CodexWorkerLauncher(runner=runner)
     issue = GitHubIssue(number=39, title="Use cmux", body="Launch through cmux", labels=["ai:ready"])
     worker_command = launcher.build(repo_path=tmp_path, repo="owner/repo", issue=issue, branch="ai/issue-39-use-cmux")
+    monkeypatch.delenv("HASYSTEM_WORKER_TERMINAL", raising=False)
+    monkeypatch.setattr("hasystem.worker.shutil.which", lambda _binary: None)
 
-    # When: launching with the explicit legacy/fallback path.
+    # When: launching in automatic mode.
     launcher.launch(worker_command)
 
-    # Then: the fallback is still available, but cmux-preferred launches do not use it.
-    assert runner.commands == [("osascript", "-e", launcher.build_terminal_command(worker_command).args[-1])]
+    # Then: headless fallback runs the worker directly instead of opening Terminal.app.
+    assert runner.commands == [("codex", ".")]
+
+
+def test_launcher_uses_terminal_app_when_terminal_mode_requested(tmp_path: Path, monkeypatch) -> None:
+    # Given: cmux is installed, but the operator requested the legacy Terminal.app environment.
+    runner = RecordingCommandRunner([CommandResult(stdout="", stderr="", returncode=0)])
+    launcher = CodexWorkerLauncher(runner=runner)
+    issue = GitHubIssue(number=69, title="Terminal mode", body="Use Terminal.app", labels=["ai:ready"])
+    worker_command = launcher.build(repo_path=tmp_path, repo="owner/repo", issue=issue, branch="ai/issue-69-terminal-mode")
+    monkeypatch.setenv("HASYSTEM_WORKER_TERMINAL", "terminal")
+    monkeypatch.setattr("hasystem.worker.shutil.which", lambda binary: f"/usr/bin/{binary}" if binary == "cmux" else None)
+
+    # When: launching with the terminal mode override.
+    launcher.launch(worker_command)
+
+    # Then: the launcher uses Terminal.app instead of cmux workspace/surface commands.
+    expected = launcher.build_terminal_command(worker_command)
+    assert runner.commands == [expected.args]
+    assert runner.commands[0][0:2] == ("osascript", "-e")
+
+
+def test_worker_terminal_mode_env_aliases() -> None:
+    assert resolve_worker_terminal_mode(prefer_cmux=True, env={}) == "auto"
+    assert resolve_worker_terminal_mode(prefer_cmux=False, env={}) == "terminal"
+    assert resolve_worker_terminal_mode(prefer_cmux=True, env={"HASYSTEM_WORKER_TERMINAL": "Terminal.app"}) == "terminal"
+    assert resolve_worker_terminal_mode(prefer_cmux=True, env={"HASYSTEM_WORKER_TERMINAL": "headless"}) == "direct"
 
 
 def test_run_loop_dry_run_ignores_executor_argument_and_uses_issue_label(tmp_path: Path) -> None:
