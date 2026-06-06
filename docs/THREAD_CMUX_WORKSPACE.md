@@ -70,20 +70,30 @@ If the workspace already exists, reuse it instead of creating a second workspace
 
 ## Provision Multi-Agent Surfaces
 
-Provision ten additive terminal surfaces in the same workspace. Surface roles:
+Provision twenty additive terminal surfaces in the same workspace. Surface roles:
 
 | Surface | Role |
 | --- | --- |
 | 01 | Control / issue selection / git state |
-| 02 | Codex implementation worker |
-| 03 | Codex verification worker |
-| 04 | OmX/OmO planning or ULW prompt worker |
-| 05 | Documentation/report worker |
-| 06 | GitHub issue/PR mutation checker |
-| 07 | Integration branch and conflict resolver |
-| 08 | Test rerun / failure diagnosis |
-| 09 | Evidence collector |
-| 10 | Follow-up issue creator |
+| 02 | Product thesis / operator intent tracker |
+| 03 | GitHub issue contract reader |
+| 04 | Codex implementation worker A |
+| 05 | Codex implementation worker B |
+| 06 | OmX/OmO planning or ULW prompt worker |
+| 07 | Documentation/report worker |
+| 08 | README/onboarding worker |
+| 09 | Policy/harness consistency worker |
+| 10 | Test authoring worker |
+| 11 | Test rerun / failure diagnosis |
+| 12 | GitHub issue/PR mutation checker |
+| 13 | Integration branch and conflict resolver |
+| 14 | Evidence collector |
+| 15 | Security/no-fabrication reviewer |
+| 16 | Platform setup reviewer |
+| 17 | macOS cmux command verifier |
+| 18 | Windows fallback consistency reviewer |
+| 19 | PR body/checks watcher |
+| 20 | Follow-up issue creator |
 
 Example additive surface creation:
 

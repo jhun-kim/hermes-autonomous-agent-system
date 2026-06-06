@@ -24,6 +24,7 @@ def test_issue_loop_harness_is_user_editable_markdown_contract() -> None:
 
     assert "Run one bounded GitHub issue" in text
     assert "1512679333611700224" in text
+    assert "twenty additive terminal surfaces" in text
     assert "Run Codex CLI visibly" in text
     assert "On macOS, cmux is the default" in text
     assert "On Windows, do not require cmux" in text
@@ -51,3 +52,13 @@ def test_thread_cmux_workspace_is_the_central_mac_doc() -> None:
     assert "cmux new-workspace" in text
     assert "cmux new-surface" in text
     assert "codex exec" in text
+    assert "twenty additive terminal surfaces" in text
+    assert "| 20 | Follow-up issue creator |" in text
+
+
+def test_cmux_example_uses_twenty_surfaces() -> None:
+    text = (ROOT / "examples" / "cmux-20-surface-workspace.md").read_text(encoding="utf-8")
+
+    assert "# cmux 20-Surface Workspace Example" in text
+    assert "Surface 01" in text
+    assert "Surface 20: follow-up issue creator" in text

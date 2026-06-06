@@ -16,7 +16,7 @@ The repository's canonical operating room is Discord thread `1512679333611700224
 
 - One Discord thread maps to one cmux workspace.
 - The workspace name should be deterministic from thread/channel context.
-- Add ten terminal surfaces by default for parallel workers.
+- Add twenty terminal surfaces by default for parallel workers.
 
 ## Visible Execution
 

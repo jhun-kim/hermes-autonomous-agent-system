@@ -19,7 +19,7 @@ Run one bounded GitHub issue from selection to verified completion inside a Disc
 - On macOS, cmux is the default workspace layer; if cmux is missing, guide the user through cmux installation before starting repository-changing work.
 - On Windows, do not require cmux; use a normal terminal environment with Codex CLI as the visible worker surface.
 - On Linux or unknown platforms, prefer cmux when available and otherwise use a visible terminal Codex fallback while reporting the chosen mode.
-- Provision ten additive terminal surfaces by default for parallel worker capacity.
+- Provision twenty additive terminal surfaces by default for parallel worker capacity.
 - Keep work focus-neutral; do not steal focus or create unrelated workspaces.
 - Run Codex CLI visibly inside the relevant cmux surface when claiming Codex execution.
 - In Windows terminal fallback mode, run Codex visibly in the terminal and preserve command/log evidence just like a cmux surface.
