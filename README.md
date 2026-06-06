@@ -13,6 +13,7 @@ Markdown harness map:
 - [`policies/cmux-first.md`](policies/cmux-first.md) — one Discord thread maps to one cmux workspace with visible worker surfaces.
 - [`policies/evidence-and-no-fabrication.md`](policies/evidence-and-no-fabrication.md) — reports must be grounded in real command/GitHub evidence.
 - [`templates/worker-prompt.md`](templates/worker-prompt.md), [`templates/follow-up-issue.md`](templates/follow-up-issue.md), and [`templates/verification-report.md`](templates/verification-report.md) — copy/paste contracts for workers and operators.
+- [`docs/PLATFORM_SETUP.md`](docs/PLATFORM_SETUP.md) — macOS uses cmux by default and should install it when missing; Windows uses visible terminal Codex fallback instead of requiring cmux.
 
 Validate the Markdown harness layer with:
 

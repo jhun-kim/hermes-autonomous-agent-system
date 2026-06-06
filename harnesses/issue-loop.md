@@ -15,9 +15,13 @@ Run one bounded GitHub issue from selection to verified completion, then create 
 ## Required Workspace
 
 - Treat one Discord thread as one cmux workspace.
+- On macOS, cmux is the default workspace layer; if cmux is missing, guide the user through cmux installation before starting repository-changing work.
+- On Windows, do not require cmux; use a normal terminal environment with Codex CLI as the visible worker surface.
+- On Linux or unknown platforms, prefer cmux when available and otherwise use a visible terminal Codex fallback while reporting the chosen mode.
 - Provision ten additive terminal surfaces by default for parallel worker capacity.
 - Keep work focus-neutral; do not steal focus or create unrelated workspaces.
 - Run Codex CLI visibly inside the relevant cmux surface when claiming Codex execution.
+- In Windows terminal fallback mode, run Codex visibly in the terminal and preserve command/log evidence just like a cmux surface.
 - Use per-surface branches/worktrees when more than one worker edits files.
 
 ## Steps
@@ -27,7 +31,7 @@ Run one bounded GitHub issue from selection to verified completion, then create 
 3. Read the issue body and labels; make it the work contract.
 4. Mark the issue in progress where the repository label workflow supports it.
 5. Create a topic branch named for the issue.
-6. Launch or prepare visible cmux surfaces for the selected worker engine.
+6. Launch or prepare visible cmux surfaces for the selected worker engine on macOS/cmux systems, or a visible Codex terminal fallback on Windows.
 7. Implement only the issue acceptance criteria.
 8. Run required verification commands and capture real output.
 9. Clean runtime artifacts before staging changes.

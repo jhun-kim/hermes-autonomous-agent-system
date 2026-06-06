@@ -4,6 +4,12 @@
 
 cmux is the workspace/surface layer for repository work. Worker engines such as Codex, LazyCodex, OmX, and OmO run inside cmux-managed surfaces rather than replacing cmux.
 
+## Platform Defaults
+
+- macOS: cmux is the default. If `cmux` is missing on the user's computer, the LLM/operator should guide installation and verify `cmux version` before beginning repository-changing work.
+- Windows: cmux is not required. Use a normal terminal environment with Codex CLI as the visible worker surface.
+- Linux or unknown: prefer cmux when it is available; otherwise use a visible terminal Codex fallback and report that fallback in the final evidence.
+
 ## Discord Thread Mapping
 
 - One Discord thread maps to one cmux workspace.
@@ -19,6 +25,8 @@ When Codex or another worker is claimed, a user opening the cmux workspace must 
 - or logged worker output in the relevant surface.
 
 Hidden background-only execution is not enough to claim visible cmux/Codex work.
+
+When Windows terminal fallback is used, the same visibility rule applies: the Codex command, live session, or saved log must be inspectable in the terminal environment.
 
 ## Parallel Work
 

@@ -24,5 +24,17 @@ def test_issue_loop_harness_is_user_editable_markdown_contract() -> None:
 
     assert "Run one bounded GitHub issue" in text
     assert "Run Codex CLI visibly" in text
+    assert "On macOS, cmux is the default" in text
+    assert "On Windows, do not require cmux" in text
     assert "Do not fabricate" in text
     assert "Follow-up issue URL" in text
+
+
+def test_platform_setup_documents_mac_cmux_and_windows_terminal_codex() -> None:
+    text = (ROOT / "docs" / "PLATFORM_SETUP.md").read_text(encoding="utf-8")
+
+    assert "## macOS: cmux by default" in text
+    assert "cmux is missing" in text
+    assert "cmux version" in text
+    assert "## Windows: terminal Codex fallback" in text
+    assert "codex --version" in text

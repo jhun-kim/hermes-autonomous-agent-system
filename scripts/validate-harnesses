@@ -20,6 +20,7 @@ REQUIRED_FILES = [
     "templates/follow-up-issue.md",
     "templates/verification-report.md",
     "examples/basic-issue-loop.md",
+    "docs/PLATFORM_SETUP.md",
 ]
 
 REQUIRED_SECTIONS = {
@@ -32,14 +33,16 @@ REQUIRED_SECTIONS = {
         "## Prohibited",
     ],
     "policies/issue-first.md": ["## Rule", "## Required Order", "## Exceptions"],
-    "policies/cmux-first.md": ["## Rule", "## Discord Thread Mapping", "## Visible Execution"],
+    "policies/cmux-first.md": ["## Rule", "## Platform Defaults", "## Discord Thread Mapping", "## Visible Execution"],
     "policies/evidence-and-no-fabrication.md": ["## Rule", "## Required Evidence", "## Prohibited"],
+    "docs/PLATFORM_SETUP.md": ["## macOS: cmux by default", "## Windows: terminal Codex fallback", "## Cross-platform rule"],
 }
 
 REQUIRED_TERMS = {
-    "harnesses/issue-loop.md": ["GitHub issue", "cmux", "Codex", "follow-up issue"],
+    "harnesses/issue-loop.md": ["GitHub issue", "cmux", "Codex", "follow-up issue", "Windows", "terminal fallback"],
     "policies/issue-first.md": ["GitHub issue", "source of truth"],
-    "policies/cmux-first.md": ["Discord thread", "cmux workspace", "visible"],
+    "policies/cmux-first.md": ["Discord thread", "cmux workspace", "visible", "macOS", "Windows", "Codex CLI"],
+    "docs/PLATFORM_SETUP.md": ["cmux is missing", "cmux version", "Windows Terminal", "codex --version"],
 }
 
 
