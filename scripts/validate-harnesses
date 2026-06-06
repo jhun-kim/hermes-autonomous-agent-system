@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""Validate Markdown harness engineering artifacts.
+
+This script intentionally checks Markdown files rather than owning the workflow in
+Python. The operating logic remains user-editable in `.md` files.
+"""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+REQUIRED_FILES = [
+    "harnesses/issue-loop.md",
+    "policies/issue-first.md",
+    "policies/cmux-first.md",
+    "policies/evidence-and-no-fabrication.md",
+    "templates/worker-prompt.md",
+    "templates/follow-up-issue.md",
+    "templates/verification-report.md",
+    "examples/basic-issue-loop.md",
+    "examples/cmux-20-surface-workspace.md",
+    "docs/THREAD_CMUX_WORKSPACE.md",
+    "docs/PLATFORM_SETUP.md",
+]
+
+REQUIRED_SECTIONS = {
+    "harnesses/issue-loop.md": [
+        "## Purpose",
+        "## Inputs",
+        "## Required Workspace",
+        "## Steps",
+        "## Verification",
+        "## Prohibited",
+    ],
+    "policies/issue-first.md": ["## Rule", "## Required Order", "## Exceptions"],
+    "policies/cmux-first.md": ["## Rule", "## Platform Defaults", "## Discord Thread Mapping", "## Visible Execution"],
+    "policies/evidence-and-no-fabrication.md": ["## Rule", "## Required Evidence", "## Prohibited"],
+    "examples/cmux-20-surface-workspace.md": ["# cmux 20-Surface Workspace Example"],
+    "docs/THREAD_CMUX_WORKSPACE.md": ["## Thread Identity", "## Product Center", "## Create or Reuse the Workspace", "## Provision Multi-Agent Surfaces", "## Verification Checklist"],
+    "docs/PLATFORM_SETUP.md": ["## macOS: cmux by default", "## Windows: terminal Codex fallback", "## Cross-platform rule"],
+}
+
+REQUIRED_TERMS = {
+    "harnesses/issue-loop.md": ["GitHub issue", "cmux", "Codex", "follow-up issue", "Windows", "terminal fallback", "twenty additive terminal surfaces"],
+    "policies/issue-first.md": ["GitHub issue", "source of truth"],
+    "policies/cmux-first.md": ["Discord thread", "cmux workspace", "visible", "macOS", "Windows", "Codex CLI", "1512679333611700224"],
+    "examples/cmux-20-surface-workspace.md": ["Surface 01", "Surface 20", "follow-up issue creator"],
+    "docs/THREAD_CMUX_WORKSPACE.md": ["1478650515888934932", "1478650642854580434", "1512679333611700224", "hasystem-thread-1512679333611700224", "twenty additive terminal surfaces", "| 20 | Follow-up issue creator |", "cmux new-workspace", "cmux new-surface", "codex exec"],
+    "docs/PLATFORM_SETUP.md": ["cmux is missing", "cmux version", "Windows Terminal", "codex --version"],
+}
+
+
+def main() -> int:
+    failures: list[str] = []
+
+    for relative in REQUIRED_FILES:
+        path = ROOT / relative
+        if not path.exists():
+            failures.append(f"missing required file: {relative}")
+            continue
+        text = path.read_text(encoding="utf-8")
+        if not text.startswith("# "):
+            failures.append(f"{relative}: first line must be a Markdown H1")
+        for section in REQUIRED_SECTIONS.get(relative, []):
+            if section not in text:
+                failures.append(f"{relative}: missing section {section}")
+        for term in REQUIRED_TERMS.get(relative, []):
+            if term not in text:
+                failures.append(f"{relative}: missing required term {term!r}")
+
+    if failures:
+        print("Markdown harness validation failed:")
+        for failure in failures:
+            print(f"- {failure}")
+        return 1
+
+    print(f"Markdown harness validation passed: {len(REQUIRED_FILES)} files checked")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -2,9 +2,35 @@
 
 [![CI](https://github.com/jhun-kim/hermes-autonomous-agent-system/actions/workflows/ci.yml/badge.svg)](https://github.com/jhun-kim/hermes-autonomous-agent-system/actions/workflows/ci.yml)
 
-MVP orchestrator for a human-governed Hermes + GitHub + Discord + cmux workspace/surface workflow, with LazyCodex/OMX used only as worker engines inside cmux-managed surfaces.
+Markdown harness engineering for a macOS cmux multi-agent workspace. The repository's center is one Discord thread mapped to one cmux workspace, with visible Codex/OmX/OmO worker surfaces operating GitHub issues from Markdown harnesses. Python remains the lightweight glue that validates those files and transports them into Hermes/GitHub/Discord/cmux execution.
 
-Current scope:
+The canonical thread workspace is documented in [`docs/THREAD_CMUX_WORKSPACE.md`](docs/THREAD_CMUX_WORKSPACE.md):
+
+```text
+Guild ID: 1478650515888934932
+Parent Channel ID: 1478650642854580434
+Thread ID: 1512679333611700224
+```
+
+The core promise is: **users operate multi-agent coding by editing Markdown and watching cmux surfaces, not by editing Python.** Start with [`docs/THREAD_CMUX_WORKSPACE.md`](docs/THREAD_CMUX_WORKSPACE.md), then run [`harnesses/issue-loop.md`](harnesses/issue-loop.md) and adjust the policies in [`policies/`](policies/) plus reusable prompts in [`templates/`](templates/).
+
+Markdown harness map:
+
+- [`docs/THREAD_CMUX_WORKSPACE.md`](docs/THREAD_CMUX_WORKSPACE.md) — central macOS cmux multi-agent workspace report for Discord thread `1512679333611700224`.
+- [`harnesses/issue-loop.md`](harnesses/issue-loop.md) — one bounded issue from selection through PR handoff and follow-up issue creation.
+- [`policies/issue-first.md`](policies/issue-first.md) — every repo-changing task starts with a confirmed GitHub issue.
+- [`policies/cmux-first.md`](policies/cmux-first.md) — one Discord thread maps to one cmux workspace with visible worker surfaces.
+- [`policies/evidence-and-no-fabrication.md`](policies/evidence-and-no-fabrication.md) — reports must be grounded in real command/GitHub evidence.
+- [`templates/worker-prompt.md`](templates/worker-prompt.md), [`templates/follow-up-issue.md`](templates/follow-up-issue.md), and [`templates/verification-report.md`](templates/verification-report.md) — copy/paste contracts for workers and operators.
+- [`docs/PLATFORM_SETUP.md`](docs/PLATFORM_SETUP.md) — macOS uses cmux by default and should install it when missing; Windows uses visible terminal Codex fallback instead of requiring cmux.
+
+Validate the Markdown harness layer with:
+
+```bash
+python3 scripts/validate-harnesses
+```
+
+Current execution scope:
 
 1. Parse GitHub repos as `owner/repo` or `https://github.com/owner/repo(.git)`.
 2. Clone or update repos under `/Users/chai/Documents/GitHub` by default.
@@ -59,10 +85,10 @@ python3 -m hasystem.commands.install_ko --choice 3 --dry-run  # Gateway dry-run 
 Repository coding work is orchestrated through [cmux](https://github.com/manaflow-ai/cmux) workspace and surface primitives when cmux is installed:
 
 - If the runtime is already inside cmux, `CMUX_WORKSPACE_ID` is the default target. The launcher creates an additional terminal surface in that caller workspace and sends the worker command there.
-- For Discord-originated work, the Discord thread is the workspace boundary. The launcher derives a deterministic workspace name from `thread_name`/`thread_id` (falling back to channel context), reuses that workspace when present, creates it when absent, and provisions ten additive terminal surfaces by default for parallel Codex workers.
+- For Discord-originated work, the Discord thread is the workspace boundary. The launcher derives a deterministic workspace name from `thread_name`/`thread_id` (falling back to channel context), reuses that workspace when present, creates it when absent, and provisions twenty additive terminal surfaces by default for parallel Codex workers.
 - Each default surface runs Codex CLI with a prompt that explicitly requires OmX/OmO skills/workflows, especially ULW for implementation work. OmX and OmO can still be selected as direct worker engines by labels, but Codex-in-cmux is the default surface shape.
 - Parallel decomposition should increase surfaces inside the same Discord-thread workspace: Codex, OmX, and OmO workers can run side by side as separate cmux surfaces for the same thread.
-- Branch isolation is mandatory for parallel surfaces. Use per-surface git worktrees and branches such as `ai/issue-51-topic/surface-01` through `surface-10`, then merge/combine verified branches into an integration branch before pushing and opening PR work.
+- Branch isolation is mandatory for parallel surfaces. Use per-surface git worktrees and branches such as `ai/issue-51-topic/surface-01` through `surface-20`, then merge/combine verified branches into an integration branch before pushing and opening PR work.
 - If no Discord context or caller workspace is available, the launcher creates one cmux workspace rooted at the target repository with `cmux new-workspace --cwd <repo> --command <worker> --focus false`.
 - Worker launches are additive and focus-neutral. Do not select other workspaces, focus panes, open unbounded Terminal.app windows, or create unrelated cmux workspaces for parallel coding work.
 - `executor:lazycodex`/`executor:codex`, `executor:omx`, and `executor:omo` select the worker engine/prompt shape. They do not select the terminal/session manager; cmux owns that layer by default.

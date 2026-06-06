@@ -35,11 +35,11 @@ When launching or instructing coding workers for repository tasks, use cmux as t
 
 1. Prefer the caller/current cmux workspace (`CMUX_WORKSPACE_ID`) when present.
 2. For Discord-originated work, treat the Discord thread as the cmux workspace boundary. Derive one deterministic workspace name from the Discord thread/channel context and keep all work for that thread in that workspace.
-3. Provision the Discord-thread workspace with **10 additive terminal surfaces by default** for parallel workers. Do not collapse them into one terminal, and do not create unrelated cmux workspaces for the same Discord thread.
+3. Provision the Discord-thread workspace with **20 additive terminal surfaces by default** for parallel workers. Do not collapse them into one terminal, and do not create unrelated cmux workspaces for the same Discord thread.
 4. Run Codex CLI in those surfaces and instruct it to use OmX/OmO skills/workflows, especially ULW for implementation work. OmX/OmO can also be selected as worker engines by labels, but cmux remains the workspace/surface layer.
 5. Make Codex CLI usage visibly verifiable inside cmux. A user who opens the relevant cmux workspace/surface must be able to see the Codex CLI session, command invocation, or live/logged Codex output for the work being claimed.
 6. Do not claim cmux/Codex execution for hidden background-only Codex processes unless their invocation and output are surfaced in the relevant cmux surface for user inspection.
-7. Split parallel work by git worktree/branch, using per-surface branches such as `ai/issue-51-topic/surface-01` through `surface-10`, so workers do not fight over the same index or working tree.
+7. Split parallel work by git worktree/branch, using per-surface branches such as `ai/issue-51-topic/surface-01` through `surface-20`, so workers do not fight over the same index or working tree.
 8. After worker branches finish, verify each branch, merge/combine the accepted branch changes into an integration branch, push, create/update the PR, and include the issue number in the PR body.
 9. Keep layout changes additive and focus-neutral (`--focus false` where supported).
 10. If no Discord/caller workspace exists, create one cmux workspace rooted at the target repository.
