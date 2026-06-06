@@ -2,14 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
-from dataclasses import replace
 from pathlib import Path
 from typing import NoReturn
 
 from hasystem.command_runner import SubprocessCommandRunner
-from hasystem.compaction_rollover import DiscordRestContinuationClient
 from hasystem.discord_request import (
     DiscordAutomationService,
     DiscordRequestParseError,
@@ -40,11 +37,6 @@ def main() -> int:
         help="CLI repo alias override. Repeatable.",
     )
     parser.add_argument("--default-repo", help="CLI default repo override")
-    parser.add_argument(
-        "--compaction-rollover-threshold",
-        type=int,
-        help="Context compaction count that triggers continuation rollover; defaults to config or 7.",
-    )
     parser.add_argument(
         "--channel-default-repo",
         action="append",
@@ -79,11 +71,6 @@ def main() -> int:
             default_repo_override=args.default_repo,
             allow_repo_overrides=_allow_repo_overrides(args.allow_repo),
         )
-        if args.compaction_rollover_threshold is not None:
-            router_config = replace(
-                router_config,
-                compaction_rollover_threshold=args.compaction_rollover_threshold,
-            )
         runner = SubprocessCommandRunner()
         workspace = Workspace(Path(args.workspace), runner)
         effective_dry_run = args.dry_run or event.dry_run
@@ -107,7 +94,7 @@ def main() -> int:
             dry_run_override=True if args.dry_run else None,
             no_run_loop_override=True if args.no_run_loop else None,
             state_store=None if effective_dry_run else StateStore(Path(args.state_db)),
-            discord_client=_discord_client_from_env(),
+            discord_client=None,
         )
     except DiscordRequestParseError as exc:
         print(json.dumps({"status": "error", "error": str(exc)}, ensure_ascii=False), file=sys.stderr)
@@ -140,12 +127,6 @@ def _allow_repo_overrides(values: list[str] | None) -> frozenset[str] | None:
         return None
     return frozenset(value.strip() for value in values if value.strip())
 
-
-def _discord_client_from_env() -> DiscordRestContinuationClient | None:
-    token = os.environ.get("DISCORD_BOT_TOKEN", "").strip()
-    if not token:
-        return None
-    return DiscordRestContinuationClient(bot_token=token)
 
 
 class _DryRunLoopRunner:

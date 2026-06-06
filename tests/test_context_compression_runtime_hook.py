@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 
-def test_hermes_context_compression_hook_console_script_entrypoint_exists() -> None:
+def test_hermes_context_compression_hook_console_script_is_not_installed() -> None:
     # Given: the project package metadata.
     pyproject = ConfigParser()
     pyproject.read(Path("pyproject.toml"))
@@ -17,8 +17,8 @@ def test_hermes_context_compression_hook_console_script_entrypoint_exists() -> N
     # When: console scripts are inspected.
     scripts = pyproject["project.scripts"]
 
-    # Then: the live runtime hook points at the context compression hook command.
-    assert scripts["hermes-context-compression-hook"].strip('"') == "hasystem.commands.context_compression_hook:main"
+    # Then: hasystem no longer installs a context-compression rollover hook entrypoint.
+    assert "hermes-context-compression-hook" not in scripts
 
 
 def test_context_compression_hook_noops_by_default_without_state_write(tmp_path: Path) -> None:
@@ -38,8 +38,6 @@ def test_context_compression_hook_noops_by_default_without_state_write(tmp_path:
             str(state_db),
             "--workspace",
             str(tmp_path / "workspace"),
-            "--compaction-rollover-threshold",
-            "1",
         ],
         cwd=Path.cwd(),
         env=env,
@@ -57,8 +55,8 @@ def test_context_compression_hook_noops_by_default_without_state_write(tmp_path:
     assert not state_db.exists()
 
 
-def test_context_compression_hook_enabled_low_threshold_dispatches_lifecycle_event(tmp_path: Path) -> None:
-    # Given: live hook dispatch is explicitly enabled with rollover threshold one and no Discord token.
+def test_context_compression_hook_enabled_low_threshold_noops_without_rollover(tmp_path: Path) -> None:
+    # Given: stale live hook dispatch is explicitly enabled with rollover threshold one.
     env = _hook_env()
     env["HERMES_CONTEXT_COMPACTION_DISPATCH_ENABLED"] = "true"
     state_db = tmp_path / "state.db"
@@ -75,8 +73,6 @@ def test_context_compression_hook_enabled_low_threshold_dispatches_lifecycle_eve
             str(state_db),
             "--workspace",
             str(tmp_path / "workspace"),
-            "--compaction-rollover-threshold",
-            "1",
         ],
         cwd=Path.cwd(),
         env=env,
@@ -85,36 +81,17 @@ def test_context_compression_hook_enabled_low_threshold_dispatches_lifecycle_eve
         check=False,
     )
 
-    # Then: the hasystem dispatch seam receives type=context.compaction with complete handoff metadata.
+    # Then: the stale hook command is inert and does not create rollover state.
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
-    assert payload["status"] == "rollover_required"
-    assert payload["dispatch"]["dispatched"] is True
-    assert payload["event"]["type"] == "context.compaction"
-    assert payload["event"]["guild_id"] == "guild-25"
-    assert payload["event"]["channel_id"] == "channel-25"
-    assert payload["event"]["thread_id"] == "thread-25"
-    assert payload["event"]["session_id"] == "old-session-25"
-    assert payload["event"]["new_session_id"] == "new-session-25"
-    assert payload["event"]["repo"] == "jhun-kim/hermes-autonomous-agent-system"
-    assert payload["event"]["latest_user_goal"] == "Finish GitHub issue #25"
-    assert payload["event"]["active_issue"] == {
-        "number": 25,
-        "title": "Connect hasystem compaction dispatch seam to live Hermes runtime hooks",
-        "labels": ["executor:lazycodex", "ai:in-progress", "priority:p3"],
-    }
-    assert payload["event"]["compression_summary"] == "compression summary from live runtime"
-    assert payload["event"]["handoff_context"] == "handoff context from live runtime"
-    assert "compression summary from live runtime" in payload["event"]["session_summary"]
-    assert "handoff context from live runtime" in payload["event"]["session_summary"]
-    assert payload["continuation"]["conversation_id"] == "discord:thread-25"
-    assert payload["continuation"]["compaction_count"] == 1
-    assert payload["continuation"]["should_rollover"] is True
-    assert state_db.exists()
+    assert payload["status"] == "noop"
+    assert payload["dispatch"]["dispatched"] is False
+    assert payload["dispatch"]["reason"] == "context compaction thread rollover has been removed"
+    assert not state_db.exists()
 
 
-def test_context_compression_hook_enabled_non_discord_noops(tmp_path: Path) -> None:
-    # Given: live hook dispatch is enabled but the compression lifecycle came from a non-Discord Hermes session.
+def test_context_compression_hook_enabled_non_discord_also_noops_after_rollover_removal(tmp_path: Path) -> None:
+    # Given: stale live hook dispatch is enabled and the compression lifecycle came from a non-Discord Hermes session.
     env = _hook_env()
     env["HERMES_CONTEXT_COMPACTION_DISPATCH_ENABLED"] = "1"
     state_db = tmp_path / "state.db"
@@ -132,8 +109,6 @@ def test_context_compression_hook_enabled_non_discord_noops(tmp_path: Path) -> N
             str(state_db),
             "--workspace",
             str(tmp_path / "workspace"),
-            "--compaction-rollover-threshold",
-            "1",
         ],
         cwd=Path.cwd(),
         env=env,
@@ -142,22 +117,22 @@ def test_context_compression_hook_enabled_non_discord_noops(tmp_path: Path) -> N
         check=False,
     )
 
-    # Then: enabled dispatch still fails closed for unsupported non-Discord runtime hooks.
+    # Then: all enabled compaction dispatches are inert after rollover removal.
     assert result.returncode == 0, result.stderr
     output = json.loads(result.stdout)
     assert output["status"] == "noop"
     assert output["dispatch"]["dispatched"] is False
-    assert output["dispatch"]["reason"] == "context compaction dispatch only supports Discord sessions"
+    assert output["dispatch"]["reason"] == "context compaction thread rollover has been removed"
     assert not state_db.exists()
 
 
-def test_gateway_conversation_key_survives_rotated_hermes_sessions(tmp_path: Path) -> None:
-    # Given: two successful live compression lifecycles in the same Discord thread with different Hermes session ids.
+def test_repeated_rotated_hermes_sessions_do_not_create_rollover_state(tmp_path: Path) -> None:
+    # Given: two stale live compression lifecycles in the same Discord thread with different Hermes session ids.
     env = _hook_env()
     env["HERMES_CONTEXT_COMPACTION_DISPATCH_ENABLED"] = "true"
     state_db = tmp_path / "state.db"
 
-    # When: the hook sees both old-session to new-session rotations below a threshold of two.
+    # When: the hook sees both old-session to new-session rotations with the old threshold flag.
     first = subprocess.run(
         [
             sys.executable,
@@ -169,8 +144,6 @@ def test_gateway_conversation_key_survives_rotated_hermes_sessions(tmp_path: Pat
             str(state_db),
             "--workspace",
             str(tmp_path / "workspace"),
-            "--compaction-rollover-threshold",
-            "2",
         ],
         cwd=Path.cwd(),
         env=env,
@@ -189,8 +162,6 @@ def test_gateway_conversation_key_survives_rotated_hermes_sessions(tmp_path: Pat
             str(state_db),
             "--workspace",
             str(tmp_path / "workspace"),
-            "--compaction-rollover-threshold",
-            "2",
         ],
         cwd=Path.cwd(),
         env=env,
@@ -199,16 +170,16 @@ def test_gateway_conversation_key_survives_rotated_hermes_sessions(tmp_path: Pat
         check=False,
     )
 
-    # Then: rollover counts the stable Discord thread, not each volatile Hermes session id separately.
+    # Then: neither event records compaction count state or requests rollover.
     assert first.returncode == 0, first.stderr
     assert second.returncode == 0, second.stderr
     first_payload = json.loads(first.stdout)
     second_payload = json.loads(second.stdout)
-    assert first_payload["status"] == "compaction_recorded"
-    assert first_payload["continuation"]["compaction_count"] == 1
-    assert second_payload["status"] == "rollover_required"
-    assert second_payload["continuation"]["conversation_id"] == "discord:thread-25"
-    assert second_payload["continuation"]["compaction_count"] == 2
+    assert first_payload["status"] == "noop"
+    assert first_payload["dispatch"]["reason"] == "context compaction thread rollover has been removed"
+    assert second_payload["status"] == "noop"
+    assert second_payload["dispatch"]["reason"] == "context compaction thread rollover has been removed"
+    assert not state_db.exists()
 
 
 def _hook_env() -> dict[str, str]:
