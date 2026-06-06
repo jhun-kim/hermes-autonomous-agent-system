@@ -2,9 +2,25 @@
 
 [![CI](https://github.com/jhun-kim/hermes-autonomous-agent-system/actions/workflows/ci.yml/badge.svg)](https://github.com/jhun-kim/hermes-autonomous-agent-system/actions/workflows/ci.yml)
 
-MVP orchestrator for a human-governed Hermes + GitHub + Discord + cmux workspace/surface workflow, with LazyCodex/OMX used only as worker engines inside cmux-managed surfaces.
+Markdown harness engineering for human-governed autonomous coding workspaces. The repository's user-facing logic lives in editable `.md` harnesses, policies, templates, and examples; Python remains the lightweight glue that validates those files and transports them into Hermes/GitHub/Discord/cmux execution.
 
-Current scope:
+The core promise is: **users change agent behavior by editing Markdown, not Python.** Start with [`harnesses/issue-loop.md`](harnesses/issue-loop.md), then adjust the policies in [`policies/`](policies/) and reusable prompts in [`templates/`](templates/).
+
+Markdown harness map:
+
+- [`harnesses/issue-loop.md`](harnesses/issue-loop.md) — one bounded issue from selection through PR handoff and follow-up issue creation.
+- [`policies/issue-first.md`](policies/issue-first.md) — every repo-changing task starts with a confirmed GitHub issue.
+- [`policies/cmux-first.md`](policies/cmux-first.md) — one Discord thread maps to one cmux workspace with visible worker surfaces.
+- [`policies/evidence-and-no-fabrication.md`](policies/evidence-and-no-fabrication.md) — reports must be grounded in real command/GitHub evidence.
+- [`templates/worker-prompt.md`](templates/worker-prompt.md), [`templates/follow-up-issue.md`](templates/follow-up-issue.md), and [`templates/verification-report.md`](templates/verification-report.md) — copy/paste contracts for workers and operators.
+
+Validate the Markdown harness layer with:
+
+```bash
+python3 scripts/validate-harnesses
+```
+
+Current execution scope:
 
 1. Parse GitHub repos as `owner/repo` or `https://github.com/owner/repo(.git)`.
 2. Clone or update repos under `/Users/chai/Documents/GitHub` by default.
