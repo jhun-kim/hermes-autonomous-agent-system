@@ -14,7 +14,9 @@ from .command_runner import CommandSpec, SubprocessCommandRunner
 from .models import GitHubIssue
 
 WorkerExecutor = Literal["lazycodex", "codex", "omx", "omo"]
+WorkerTerminalMode = Literal["auto", "cmux", "terminal", "direct"]
 DEFAULT_PARALLEL_SURFACE_COUNT = 10
+WORKER_TERMINAL_ENV = "HASYSTEM_WORKER_TERMINAL"
 
 
 @dataclass(frozen=True)
@@ -65,6 +67,36 @@ class WorkerLaunchContext:
         if repo:
             base = f"{base} · {repo}"
         return _cmux_safe_title(base)
+
+
+def resolve_worker_terminal_mode(*, prefer_cmux: bool, env: dict[str, str] | None = None) -> WorkerTerminalMode:
+    """Resolve the worker terminal/session manager from env and legacy preference.
+
+    Modes:
+    - auto: use cmux when installed, otherwise direct runner fallback.
+    - cmux: require cmux and fail closed if it is unavailable.
+    - terminal: use Terminal.app via osascript, even if cmux is installed.
+    - direct: run the worker command directly through the command runner.
+    """
+    value = (env or os.environ).get(WORKER_TERMINAL_ENV, "").strip().lower()
+    if value in {"", "auto"}:
+        return "auto" if prefer_cmux else "terminal"
+    aliases = {
+        "cmux": "cmux",
+        "terminal": "terminal",
+        "terminal.app": "terminal",
+        "terminal-app": "terminal",
+        "osascript": "terminal",
+        "direct": "direct",
+        "runner": "direct",
+        "headless": "direct",
+        "none": "direct",
+    }
+    try:
+        return aliases[value]  # type: ignore[return-value]
+    except KeyError as exc:
+        valid = "auto, cmux, terminal, direct"
+        raise ValueError(f"{WORKER_TERMINAL_ENV} must be one of: {valid}; got {value!r}") from exc
 
 
 @dataclass(frozen=True)
@@ -221,20 +253,25 @@ class CodexWorkerLauncher:
 
     def launch(self, command: CommandSpec, *, launch_context: WorkerLaunchContext | None = None, repo: str | None = None) -> None:
         active_runner = self.runner or SubprocessCommandRunner()
-        if self.prefer_cmux and shutil.which(self.cmux_binary):
+        terminal_mode = resolve_worker_terminal_mode(prefer_cmux=self.prefer_cmux)
+
+        if terminal_mode in {"auto", "cmux"} and shutil.which(self.cmux_binary):
             cmux_command = self.build_cmux_command(command, launch_context=launch_context, repo=repo)
             active_runner.run(cmux_command.args, cwd=cmux_command.cwd, stdin_text=cmux_command.stdin_text or None)
             return
 
-        if self.prefer_cmux:
-            # Safe fallback for headless CI or hosts without cmux: run the original
-            # worker command directly through the runner instead of opening more
-            # Terminal.app windows. Tests can fake this path through the runner.
-            active_runner.run(command.args, cwd=command.cwd, stdin_text=command.stdin_text or None)
+        if terminal_mode == "cmux":
+            raise RuntimeError(f"{WORKER_TERMINAL_ENV}=cmux was requested, but {self.cmux_binary!r} was not found")
+
+        if terminal_mode == "terminal":
+            terminal_command = self.build_terminal_command(command)
+            active_runner.run(terminal_command.args)
             return
 
-        terminal_command = self.build_terminal_command(command)
-        active_runner.run(terminal_command.args)
+        # Safe fallback for headless CI or hosts without cmux: run the original
+        # worker command directly through the runner instead of opening more
+        # Terminal.app windows. Tests can fake this path through the runner.
+        active_runner.run(command.args, cwd=command.cwd, stdin_text=command.stdin_text or None)
 
 
 def _cmux_surface_script(cmux_binary: str, workspace_id: str, worker_script: str) -> str:
