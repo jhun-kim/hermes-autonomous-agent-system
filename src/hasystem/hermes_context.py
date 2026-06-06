@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .compaction_rollover import DiscordContinuationClient
+from typing import Any
+
 from .discord_request import DiscordAutomationService
-from .gateway import DiscordGatewayEvent, JsonObject, build_gateway_response
+from .gateway import DiscordGatewayEvent, JsonObject
 from .state_store import StateStore
 
 
@@ -80,9 +81,16 @@ def dispatch_hermes_context_compression(
     config: HermesContextCompressionDispatchConfig,
     service: DiscordAutomationService,
     state_store: StateStore,
-    discord_client: DiscordContinuationClient | None = None,
+    discord_client: Any | None = None,
 ) -> HermesContextCompressionDispatchResult:
-    """Dispatch enabled Discord compression records through the gateway adapter."""
+    """No-op compatibility shim for the removed Discord thread rollover.
+
+    Hermes may still emit ordinary context-compression lifecycle events, but
+    hasystem no longer turns those events into Discord continuation threads or
+    gateway work. The unused parameters remain for callers that still pass the
+    old integration dependencies while deployments roll forward.
+    """
+    del service, state_store, discord_client
     if not config.enabled:
         return HermesContextCompressionDispatchResult(
             dispatched=False,
@@ -93,19 +101,10 @@ def dispatch_hermes_context_compression(
             dispatched=False,
             reason="context compaction dispatch only supports Discord sessions",
         )
-
-    payload = build_gateway_response(
-        service=service,
-        event=compression.to_gateway_event(),
-        dry_run_override=None,
-        no_run_loop_override=None,
-        state_store=state_store,
-        discord_client=discord_client,
-    )
     return HermesContextCompressionDispatchResult(
-        dispatched=True,
-        reason="context compaction dispatched to gateway adapter",
-        payload=payload,
+        dispatched=False,
+        reason="context compaction thread rollover has been removed",
+        payload={"status": "noop"},
     )
 
 

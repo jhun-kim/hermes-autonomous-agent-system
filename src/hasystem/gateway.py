@@ -135,7 +135,6 @@ def load_router_config(
     channel_defaults = _string_mapping(_json_object(raw_config.get("channel_default_repos")) or {})
     default_repo = _optional_str(raw_config.get("default_repo"))
     allow_repos = frozenset(_string_list(raw_config.get("allow_repos")))
-    threshold = _optional_int(raw_config.get("compaction_rollover_threshold")) or 7
     godmode_config = _godmode_config(raw_config)
 
     if repo_alias_overrides:
@@ -152,7 +151,6 @@ def load_router_config(
         default_repo=default_repo,
         channel_default_repos=channel_defaults,
         allow_repos=allow_repos,
-        compaction_rollover_threshold=threshold,
         godmode=godmode_config,
     )
 
@@ -186,12 +184,7 @@ def build_gateway_response(
     dry_run = event.dry_run if dry_run_override is None else dry_run_override
     no_run_loop = event.no_run_loop if no_run_loop_override is None else no_run_loop_override
     if event.context_compaction:
-        return _compaction_rollover_payload(
-            event=event,
-            service=service,
-            state_store=state_store,
-            discord_client=discord_client,
-        )
+        return _compaction_removed_payload(event=event)
     godmode_action = parse_godmode_command(event.raw_message)
     if godmode_action is not None:
         return _godmode_payload(service=service, event=event, action=godmode_action)
@@ -269,44 +262,14 @@ def _godmode_result_payload(result: GodmodeResult) -> JsonObject:
         "updated_at": session.updated_at,
     }
 
-def _compaction_rollover_payload(
-    *,
-    event: DiscordGatewayEvent,
-    service: DiscordAutomationService,
-    state_store: StateStore | None,
-    discord_client: Any | None,
-) -> JsonObject:
-    if state_store is None:
-        return {
-            "status": "compaction_seen",
-            "platform": event.platform,
-            "event": _event_payload(event),
-            "continuation": {
-                "should_rollover": False,
-                "reason": "No state store was provided, so compaction count was not persisted.",
-            },
-        }
-    from .compaction_rollover import RolloverConfig, record_context_compaction
-
-    result = record_context_compaction(
-        store=state_store,
-        event=event,
-        config=RolloverConfig(threshold=service.router_config.compaction_rollover_threshold),
-        discord_client=discord_client,
-    )
+def _compaction_removed_payload(*, event: DiscordGatewayEvent) -> JsonObject:
     return {
-        "status": "rollover_required" if result.should_rollover else "compaction_recorded",
+        "status": "noop",
         "platform": event.platform,
         "event": _event_payload(event),
         "continuation": {
-            "conversation_id": result.conversation_id,
-            "compaction_count": result.compaction_count,
-            "threshold": result.threshold,
-            "should_rollover": result.should_rollover,
-            "new_conversation_id": result.new_conversation_id,
-            "new_thread_id": result.new_thread_id,
-            "handoff_message": result.handoff_message,
-            "summary": result.continuation_summary,
+            "should_rollover": False,
+            "reason": "context compaction thread rollover has been removed",
         },
     }
 

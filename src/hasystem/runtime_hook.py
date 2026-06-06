@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .compaction_rollover import DiscordContinuationClient
 from .discord_request import DiscordAutomationService
 from .hermes_context import (
     ActiveIssueContext,
@@ -69,7 +68,7 @@ def dispatch_runtime_context_compression(
     config: HermesContextCompressionDispatchConfig,
     service: DiscordAutomationService,
     state_store: StateStore,
-    discord_client: DiscordContinuationClient | None = None,
+    discord_client: Any | None = None,
 ) -> HermesContextCompressionDispatchResult:
     """Dispatch a successful live Hermes old-session to new-session compression event."""
     lifecycle = HermesCompressionLifecycle.from_runtime_hook(data)

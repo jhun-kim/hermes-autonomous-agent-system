@@ -103,48 +103,13 @@ cloning repos, writing real loop state, or launching Codex/OmX workers:
 python3 -m pytest -q tests/test_gateway_wrapper_live_fixture.py
 ```
 
-#### Hermes context-compression runtime hook
+#### Context compression and Discord thread rollover
 
-`hermes-context-compression-hook` accepts the JSON shape produced by a live
-Hermes compression lifecycle boundary after `_compress_context` rotates from an
-old session id to a new one. It is disabled by default; production runtimes must
-explicitly opt in:
-
-```bash
-export HERMES_CONTEXT_COMPACTION_DISPATCH_ENABLED=true
-```
-
-The hook reads JSON from `--event-json` or stdin and routes Discord compression
-records through the same hasystem `context.compaction` gateway seam used by the
-rollover adapter. Non-Discord sessions and disabled/default runs are explicit
-no-ops.
-
-Discord rollover still happens after seven context compactions unless
-`compaction_rollover_threshold` overrides it. When the gateway includes the
-current `thread_name` or `channel_name`, continuation thread names stay rooted
-in the original Discord room/thread name for the whole chain: the first
-continuation of `Original planning thread` is
-`Original planning thread continuation 2`, and the next rollover is
-`Original planning thread continuation 3`. If Discord does not provide a
-readable room/thread name, Hermes preserves the legacy fallback name
-`Hermes continuation after <threshold> compactions`.
-
-Low-threshold smoke for a real runtime-shaped lifecycle event:
-
-```bash
-PYTHONPATH=src HERMES_CONTEXT_COMPACTION_DISPATCH_ENABLED=true \
-  python3 -m hasystem.commands.context_compression_hook \
-  --compaction-rollover-threshold 1 \
-  --event-json '{
-    "platform": "discord",
-    "discord": {"guild_id": "guild", "channel_id": "channel", "thread_id": "thread"},
-    "session": {"old_id": "old-session", "new_id": "new-session"},
-    "repository": "jhun-kim/hermes-autonomous-agent-system",
-    "latest_goal": "continue the active issue",
-    "active_issue": {"number": 25, "title": "Connect live hook", "labels": ["ai:in-progress"]},
-    "compression": {"summary": "compressed transcript summary", "handoff_context": "runtime hook handoff"}
-  }'
-```
+The old hasystem context-compression rollover integration has been removed.
+Hermes may still compress its own conversation context normally, but this
+repository no longer installs a hook, counts compactions, or creates Discord
+continuation threads after seven compressions. Stale deployments that still call
+`hasystem.commands.context_compression_hook` receive an inert `noop` response.
 
 #### Real gateway deployment checklist
 

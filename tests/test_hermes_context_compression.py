@@ -60,7 +60,7 @@ def test_dispatch_noops_when_disabled_or_not_discord(tmp_path: Path) -> None:
     # Given: configured-safe defaults and a state store that would mutate if dispatch ran.
     runner = RecordingCommandRunner([])
     store = StateStore(tmp_path / "state.db")
-    service = _service(tmp_path=tmp_path, store=store, runner=runner, threshold=1)
+    service = _service(tmp_path=tmp_path, store=store, runner=runner)
     disabled = HermesContextCompressionDispatchConfig(enabled=False)
     non_discord = HermesContextCompressionDispatchConfig(enabled=True)
 
@@ -88,14 +88,14 @@ def test_dispatch_noops_when_disabled_or_not_discord(tmp_path: Path) -> None:
     assert runner.commands == []
 
 
-def test_low_threshold_automatic_compression_dispatch_triggers_rollover(tmp_path: Path) -> None:
-    # Given: the Hermes compression hook is enabled with a threshold of one and a fake Discord client.
+def test_enabled_compression_dispatch_noops_without_thread_rollover(tmp_path: Path) -> None:
+    # Given: the old rollover path is explicitly enabled with a threshold of one.
     runner = RecordingCommandRunner([])
     store = StateStore(tmp_path / "state.db")
-    service = _service(tmp_path=tmp_path, store=store, runner=runner, threshold=1)
+    service = _service(tmp_path=tmp_path, store=store, runner=runner)
     discord = FakeDiscordContinuationClient()
 
-    # When: a real compression record is dispatched through the Hermes hook, not by invoking wrapper --event-json.
+    # When: a real compression record is dispatched through the Hermes hook.
     result = dispatch_hermes_context_compression(
         compression=_compression(platform="discord"),
         config=HermesContextCompressionDispatchConfig(enabled=True),
@@ -104,20 +104,13 @@ def test_low_threshold_automatic_compression_dispatch_triggers_rollover(tmp_path
         discord_client=discord,
     )
 
-    # Then: the existing hasystem rollover adapter receives the event and creates a continuation thread.
-    assert result.dispatched is True
-    assert result.payload is not None
-    assert result.payload["status"] == "rollover_required"
-    assert result.payload["event"]["repo"] == "owner/repo"
-    assert result.payload["event"]["latest_user_goal"] == "finish issue #22"
-    assert result.payload["event"]["active_issue"]["number"] == 22
-    assert result.payload["event"]["compression_summary"] == "Summary from automatic context compression."
-    assert result.payload["event"]["handoff_context"] == "Handoff for the next Hermes session."
-    assert result.payload["continuation"]["conversation_id"] == "discord:thread-1"
-    assert result.payload["continuation"]["new_thread_id"] == "thread-auto-new"
-    assert discord.created_parent_channel_ids == ["channel-1"]
-    assert discord.messages[0][0] == "thread-1"
-    assert discord.messages[1][0] == "thread-auto-new"
+    # Then: hasystem no longer creates continuation Discord threads from compaction counts.
+    assert result.dispatched is False
+    assert result.reason == "context compaction thread rollover has been removed"
+    assert result.payload == {"status": "noop"}
+    assert store.get_gateway_conversation("discord:thread-1") is None
+    assert discord.created_parent_channel_ids == []
+    assert discord.messages == []
     assert runner.commands == []
 
 
@@ -125,7 +118,7 @@ def test_lifecycle_hook_adapter_dispatches_from_old_session_to_rotated_session(t
     # Given: Hermes has just compressed a Discord conversation and rotated the runtime session id.
     runner = RecordingCommandRunner([])
     store = StateStore(tmp_path / "state.db")
-    service = _service(tmp_path=tmp_path, store=store, runner=runner, threshold=1)
+    service = _service(tmp_path=tmp_path, store=store, runner=runner)
     discord = FakeDiscordContinuationClient()
     runtime_event = {
         "platform": "discord",
@@ -149,16 +142,11 @@ def test_lifecycle_hook_adapter_dispatches_from_old_session_to_rotated_session(t
         discord_client=discord,
     )
 
-    # Then: rollover is keyed to the Discord thread while preserving old and new Hermes session metadata.
-    assert result.dispatched is True
-    assert result.payload is not None
-    assert result.payload["status"] == "rollover_required"
-    assert result.payload["event"]["session_id"] == "old-session-1"
-    assert result.payload["event"]["new_session_id"] == "new-session-2"
-    assert result.payload["event"]["compression_summary"] == "Summary after successful lifecycle compression."
-    assert result.payload["event"]["handoff_context"] == "Continue in the rotated Hermes session."
-    assert result.payload["continuation"]["conversation_id"] == "discord:thread-1"
-    assert result.payload["continuation"]["new_thread_id"] == "thread-auto-new"
+    # Then: rollover is removed and no Discord continuation state is created.
+    assert result.dispatched is False
+    assert result.reason == "context compaction thread rollover has been removed"
+    assert result.payload == {"status": "noop"}
+    assert store.get_gateway_conversation("discord:thread-1") is None
 
 
 def _compression(*, platform: str) -> HermesContextCompression:
@@ -176,7 +164,7 @@ def _compression(*, platform: str) -> HermesContextCompression:
     )
 
 
-def _service(*, tmp_path: Path, store: StateStore, runner: RecordingCommandRunner, threshold: int) -> DiscordAutomationService:
+def _service(*, tmp_path: Path, store: StateStore, runner: RecordingCommandRunner) -> DiscordAutomationService:
     workspace = Workspace(tmp_path / "workspace", runner)
     return DiscordAutomationService(
         intake=IntakeService(workspace=workspace, runner=runner),
@@ -186,7 +174,7 @@ def _service(*, tmp_path: Path, store: StateStore, runner: RecordingCommandRunne
             worker=CodexWorkerLauncher(runner=runner),
             github_factory=lambda repo: GitHubClient(repo=repo, runner=runner),
         ),
-        router_config=DiscordRequestRouterConfig(default_repo="owner/repo", compaction_rollover_threshold=threshold),
+        router_config=DiscordRequestRouterConfig(default_repo="owner/repo"),
     )
 
 
@@ -196,12 +184,8 @@ class FakeDiscordContinuationClient:
     messages: list[tuple[str, str]] = field(default_factory=list)
 
     def create_public_thread(self, *, parent_channel_id: str, source_thread_id: str | None, name: str):
-        from hasystem.compaction_rollover import DiscordCreatedThread
-
         self.created_parent_channel_ids.append(parent_channel_id)
-        assert source_thread_id == "thread-1"
-        assert name == "Hermes continuation after 1 compactions"
-        return DiscordCreatedThread(thread_id="thread-auto-new", name=name)
+        raise AssertionError("context compaction rollover must not create Discord threads")
 
     def post_message(self, *, channel_id: str, content: str) -> None:
         self.messages.append((channel_id, content))
