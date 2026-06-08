@@ -4,9 +4,9 @@ This is the central macOS operator report for the repository. The product shape 
 
 ## Thread Identity
 
-- Guild ID: `1478650515888934932`
-- Parent Channel ID: `1478650642854580434`
-- Thread ID: `1512679333611700224`
+- Guild ID: `123456789012345678`
+- Parent Channel ID: `123456789012345679`
+- Thread ID: `123456789012345682`
 - Workspace platform: macOS
 - Workspace layer: cmux
 - Default worker engine: Codex CLI in visible cmux terminal surfaces
@@ -43,13 +43,13 @@ If `cmux` is missing on macOS, install cmux first and verify `cmux version` befo
 Use a deterministic workspace name derived from the Discord thread:
 
 ```text
-hasystem-thread-1512679333611700224
+hasystem-thread-123456789012345682
 ```
 
 Human-readable title:
 
 ```text
-HASystem cmux multi-agent — thread 1512679333611700224
+HASystem cmux multi-agent — thread 123456789012345682
 ```
 
 ## Create or Reuse the Workspace
@@ -60,9 +60,9 @@ From the repository root on macOS:
 cd ~/Documents/GitHub/hermes-autonomous-agent-system
 cmux list-workspaces
 cmux new-workspace \
-  --name "HASystem cmux multi-agent — thread 1512679333611700224" \
+  --name "HASystem cmux multi-agent — thread 123456789012345682" \
   --cwd "$PWD" \
-  --command 'printf "HASystem thread 1512679333611700224 cmux control surface\n"; git status --short --branch; exec zsh -l' \
+  --command 'printf "HASystem thread 123456789012345682 cmux control surface\n"; git status --short --branch; exec zsh -l' \
   --focus false
 ```
 
@@ -111,7 +111,7 @@ A visible Codex launch must leave an inspectable command/session/log in the cmux
 ```bash
 cd ~/Documents/GitHub/hermes-autonomous-agent-system
 codex exec --sandbox workspace-write \
-  "Work on the confirmed GitHub issue for Discord thread 1512679333611700224. Follow harnesses/issue-loop.md and policies/cmux-first.md. Keep output evidence visible in this cmux surface."
+  "Work on the confirmed GitHub issue for Discord thread 123456789012345682. Follow harnesses/issue-loop.md and policies/cmux-first.md. Keep output evidence visible in this cmux surface."
 ```
 
 When using OmX/OmO skill prompts through Codex, encode that in the Codex prompt. Do not claim OmX/OmO/Codex was used unless this surface shows the invocation or log.
@@ -121,8 +121,8 @@ When using OmX/OmO skill prompts through Codex, encode that in the Codex prompt.
 For parallel editing, use worktrees or branches per surface:
 
 ```text
-ai/thread-1512679333611700224/issue-83/surface-02
-ai/thread-1512679333611700224/issue-83/surface-03
+ai/thread-123456789012345682/issue-83/surface-02
+ai/thread-123456789012345682/issue-83/surface-03
 ```
 
 Merge accepted work into one integration branch before pushing a PR.
@@ -144,7 +144,7 @@ A completed thread workspace run must report:
 Use this thread identity as the canonical example in repo docs and harnesses:
 
 ```text
-Guild ID: 1478650515888934932
-Parent Channel ID: 1478650642854580434
-Thread ID: 1512679333611700224
+Guild ID: 123456789012345678
+Parent Channel ID: 123456789012345679
+Thread ID: 123456789012345682
 ```

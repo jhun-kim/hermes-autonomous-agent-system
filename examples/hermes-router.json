@@ -3,9 +3,9 @@
     "hasystem": "jhun-kim/hermes-autonomous-agent-system"
   },
   "channel_default_repos": {
-    "1512060115757432833": "jhun-kim/hermes-autonomous-agent-system",
-    "1478650642854580434": "jhun-kim/hermes-autonomous-agent-system",
-    "1512332564218773564": "jhun-kim/hermes-autonomous-agent-system"
+    "123456789012345680": "jhun-kim/hermes-autonomous-agent-system",
+    "123456789012345679": "jhun-kim/hermes-autonomous-agent-system",
+    "123456789012345681": "jhun-kim/hermes-autonomous-agent-system"
   },
   "allow_repos": [
     "jhun-kim/hermes-autonomous-agent-system"
@@ -13,7 +13,7 @@
   "default_repo": "jhun-kim/hermes-autonomous-agent-system",
   "godmode": {
     "authorized_channel_ids": [
-      "1512332564218773564"
+      "123456789012345681"
     ],
     "authorized_sender_ids": [
       "REPLACE_WITH_TRUSTED_DISCORD_USER_ID"

@@ -596,7 +596,7 @@ def test_example_router_config_documents_safe_godmode_defaults_for_issue_33_thre
     godmode = config["godmode"]
 
     # Then: the example is fail-closed and safe to smoke without launching workers.
-    assert "1512332564218773564" in godmode["authorized_channel_ids"]
+    assert "123456789012345681" in godmode["authorized_channel_ids"]
     assert godmode["authorized_sender_ids"] == ["REPLACE_WITH_TRUSTED_DISCORD_USER_ID"]
     assert godmode["max_iterations"] == 0
     assert godmode["max_runtime_seconds"] <= 60
@@ -613,9 +613,9 @@ def test_gateway_adapter_godmode_status_smoke_uses_example_config_without_worker
     event = json.dumps(
         {
             "platform": "discord",
-            "guild_id": "1478650515888934932",
-            "channel_id": "1512332564218773564",
-            "thread_id": "1512332564218773564",
+            "guild_id": "123456789012345678",
+            "channel_id": "123456789012345681",
+            "thread_id": "123456789012345681",
             "sender": {"id": "REPLACE_WITH_TRUSTED_DISCORD_USER_ID", "display_name": "Issue33Smoke"},
             "content": "godmode status",
             "dry_run": False,
@@ -650,7 +650,7 @@ def test_gateway_adapter_godmode_status_smoke_uses_example_config_without_worker
     assert payload["status"] == "godmode_status"
     assert payload["godmode"]["status"] == "stopped"
     assert payload["godmode"]["iterations"] == 0
-    assert payload["godmode"]["conversation_id"] == "discord:1512332564218773564"
+    assert payload["godmode"]["conversation_id"] == "discord:123456789012345681"
     assert not workspace.exists()
 
 

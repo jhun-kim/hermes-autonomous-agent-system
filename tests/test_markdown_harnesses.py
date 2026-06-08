@@ -23,7 +23,7 @@ def test_issue_loop_harness_is_user_editable_markdown_contract() -> None:
     text = (ROOT / "harnesses" / "issue-loop.md").read_text(encoding="utf-8")
 
     assert "Run one bounded GitHub issue" in text
-    assert "1512679333611700224" in text
+    assert "123456789012345682" in text
     assert "twenty additive terminal surfaces" in text
     assert "Run Codex CLI visibly" in text
     assert "On macOS, cmux is the default" in text
@@ -45,10 +45,10 @@ def test_platform_setup_documents_mac_cmux_and_windows_terminal_codex() -> None:
 def test_thread_cmux_workspace_is_the_central_mac_doc() -> None:
     text = (ROOT / "docs" / "THREAD_CMUX_WORKSPACE.md").read_text(encoding="utf-8")
 
-    assert "Guild ID: `1478650515888934932`" in text
-    assert "Parent Channel ID: `1478650642854580434`" in text
-    assert "Thread ID: `1512679333611700224`" in text
-    assert "hasystem-thread-1512679333611700224" in text
+    assert "Guild ID: `123456789012345678`" in text
+    assert "Parent Channel ID: `123456789012345679`" in text
+    assert "Thread ID: `123456789012345682`" in text
+    assert "hasystem-thread-123456789012345682" in text
     assert "cmux new-workspace" in text
     assert "cmux new-surface" in text
     assert "codex exec" in text

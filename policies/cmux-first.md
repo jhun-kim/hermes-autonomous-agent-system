@@ -4,7 +4,7 @@
 
 cmux is the workspace/surface layer for repository work. Worker engines such as Codex, LazyCodex, OmX, and OmO run inside cmux-managed surfaces rather than replacing cmux.
 
-The repository's canonical operating room is Discord thread `1512679333611700224` in guild `1478650515888934932`, parent channel `1478650642854580434`. Its cmux workspace should be named from that thread, for example `hasystem-thread-1512679333611700224`.
+The repository's canonical operating room is Discord thread `123456789012345682` in guild `123456789012345678`, parent channel `123456789012345679`. Its cmux workspace should be named from that thread, for example `hasystem-thread-123456789012345682`.
 
 ## Platform Defaults
 

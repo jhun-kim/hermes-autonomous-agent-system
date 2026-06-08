@@ -28,23 +28,23 @@ class PlatformValue:
 def discord_thread_event(text: str = "godmode status"):
     source = SimpleNamespace(
         platform=PlatformValue(),
-        guild_id="1478650515888934932",
-        parent_chat_id="1478650642854580434",
-        chat_id="1512332564218773564",
+        guild_id="123456789012345678",
+        parent_chat_id="123456789012345679",
+        chat_id="123456789012345681",
         chat_name="Hermes continuation after 2 compactions",
         chat_type="thread",
-        thread_id="1512332564218773564",
+        thread_id="123456789012345681",
         user_id="1032172433693749280",
         user_name="robbieboy",
         is_bot=False,
-        message_id="1512476487289143306",
+        message_id="123456789012345683",
     )
-    return SimpleNamespace(source=source, text=text, message_id="1512476487289143306")
+    return SimpleNamespace(source=source, text=text, message_id="123456789012345683")
 
 
 def test_discord_thread_godmode_event_becomes_hasystem_adapter_json(monkeypatch):
     plugin = load_plugin()
-    monkeypatch.setenv("HASYSTEM_GATEWAY_PARENT_CHANNEL_IDS", "1478650642854580434")
+    monkeypatch.setenv("HASYSTEM_GATEWAY_PARENT_CHANNEL_IDS", "123456789012345679")
     monkeypatch.setenv("HASYSTEM_GATEWAY_ADAPTER_COMMAND", "/tmp/hasystem-wrapper --live")
 
     prepared = plugin.prepare_dispatch(discord_thread_event("godmode status"))
@@ -53,13 +53,13 @@ def test_discord_thread_godmode_event_becomes_hasystem_adapter_json(monkeypatch)
     assert prepared.command == ["/tmp/hasystem-wrapper", "--live"]
     assert prepared.event == {
         "platform": "discord",
-        "guild_id": "1478650515888934932",
-        "channel_id": "1478650642854580434",
+        "guild_id": "123456789012345678",
+        "channel_id": "123456789012345679",
         "channel_name": None,
-        "thread_id": "1512332564218773564",
+        "thread_id": "123456789012345681",
         "thread_name": "Hermes continuation after 2 compactions",
         "sender": {"id": "1032172433693749280", "display_name": "robbieboy"},
-        "message_id": "1512476487289143306",
+        "message_id": "123456789012345683",
         "content": "godmode status",
     }
 
@@ -77,8 +77,8 @@ def test_hasystem_prefix_strips_routing_command(monkeypatch):
 
 def test_ordinary_discord_message_in_explicit_auto_route_thread_routes_to_hasystem(monkeypatch):
     plugin = load_plugin()
-    monkeypatch.setenv("HASYSTEM_GATEWAY_PARENT_CHANNEL_IDS", "1478650642854580434")
-    monkeypatch.setenv("HASYSTEM_GATEWAY_AUTO_ROUTE_CHANNEL_IDS", "1478650642854580434")
+    monkeypatch.setenv("HASYSTEM_GATEWAY_PARENT_CHANNEL_IDS", "123456789012345679")
+    monkeypatch.setenv("HASYSTEM_GATEWAY_AUTO_ROUTE_CHANNEL_IDS", "123456789012345679")
     monkeypatch.setenv("HASYSTEM_GATEWAY_ADAPTER_COMMAND", "/tmp/hasystem-wrapper --live")
 
     prepared = plugin.prepare_dispatch(discord_thread_event("그냥 일반 대화"))
@@ -91,7 +91,7 @@ def test_router_config_parent_channel_does_not_enable_auto_routing(tmp_path, mon
     plugin = load_plugin()
     router_config = tmp_path / "router.json"
     router_config.write_text(
-        json.dumps({"channel_default_repos": {"1478650642854580434": "jhun-kim/hermes-autonomous-agent-system"}}),
+        json.dumps({"channel_default_repos": {"123456789012345679": "jhun-kim/hermes-autonomous-agent-system"}}),
         encoding="utf-8",
     )
     monkeypatch.delenv("HASYSTEM_GATEWAY_PARENT_CHANNEL_IDS", raising=False)
@@ -105,7 +105,7 @@ def test_router_config_parent_channel_still_allows_explicit_hasystem_prefix(tmp_
     plugin = load_plugin()
     router_config = tmp_path / "router.json"
     router_config.write_text(
-        json.dumps({"channel_default_repos": {"1478650642854580434": "jhun-kim/hermes-autonomous-agent-system"}}),
+        json.dumps({"channel_default_repos": {"123456789012345679": "jhun-kim/hermes-autonomous-agent-system"}}),
         encoding="utf-8",
     )
     monkeypatch.delenv("HASYSTEM_GATEWAY_PARENT_CHANNEL_IDS", raising=False)
@@ -129,7 +129,7 @@ def test_ordinary_discord_message_outside_allowed_parent_is_not_intercepted(monk
 
 def test_hermes_escape_prefix_bypasses_auto_routing(monkeypatch):
     plugin = load_plugin()
-    monkeypatch.setenv("HASYSTEM_GATEWAY_PARENT_CHANNEL_IDS", "1478650642854580434")
+    monkeypatch.setenv("HASYSTEM_GATEWAY_PARENT_CHANNEL_IDS", "123456789012345679")
     monkeypatch.setenv("HASYSTEM_GATEWAY_ADAPTER_COMMAND", "/tmp/hasystem-wrapper --live")
 
     assert plugin.prepare_dispatch(discord_thread_event("/hermes 그냥 Hermes로 답해줘")) is None
@@ -163,5 +163,5 @@ def test_adapter_command_receives_event_json(monkeypatch):
     assert result.returncode == 0
     assert calls[0][:2] == ["/tmp/hasystem-wrapper", "--live"]
     assert calls[0][2] == "--event-json"
-    assert '"channel_id": "1478650642854580434"' in calls[0][3]
-    assert '"thread_id": "1512332564218773564"' in calls[0][3]
+    assert '"channel_id": "123456789012345679"' in calls[0][3]
+    assert '"thread_id": "123456789012345681"' in calls[0][3]
