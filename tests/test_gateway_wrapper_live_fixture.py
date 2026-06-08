@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 
 
 def test_gateway_wrapper_live_mode_uses_config_allow_list_without_allow_any(tmp_path: Path) -> None:
@@ -20,14 +21,7 @@ def test_gateway_wrapper_live_mode_uses_config_allow_list_without_allow_any(tmp_
     )
 
     # When: the reusable wrapper is exercised in live mode with the example router config.
-    result = subprocess.run(
-        ["scripts/hermes-gateway-wrapper", "--live", "--event-json", event],
-        cwd=Path.cwd(),
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    result = _run_wrapper(["--live", "--event-json", event], env)
 
     # Then: live mode succeeds through config allow_repos without relying on --allow-any-repo.
     assert result.returncode == 0, result.stderr
@@ -69,28 +63,16 @@ def test_gateway_wrapper_live_mode_accepts_explicit_allow_repo_override(tmp_path
     )
 
     # When: live mode is run once without and once with an explicit allow-repo override.
-    denied = subprocess.run(
-        ["scripts/hermes-gateway-wrapper", "--live", "--event-json", event],
-        cwd=Path.cwd(),
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    allowed = subprocess.run(
+    denied = _run_wrapper(["--live", "--event-json", event], env)
+    allowed = _run_wrapper(
         [
-            "scripts/hermes-gateway-wrapper",
             "--live",
             "--event-json",
             event,
             "--allow-repo",
             "jhun-kim/hermes-autonomous-agent-system",
         ],
-        cwd=Path.cwd(),
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
+        env,
     )
 
     # Then: repos must be allowed by config or explicit CLI allow-list.
@@ -121,18 +103,28 @@ def test_gateway_wrapper_live_mode_passes_configured_state_db(tmp_path: Path) ->
         }
     )
 
-    result = subprocess.run(
-        ["scripts/hermes-gateway-wrapper", "--live", "--event-json", event],
+    result = _run_wrapper(["--live", "--event-json", event], env)
+
+    assert result.returncode == 0, result.stderr
+    invocation = json.loads((tmp_path / "adapter-invocation.json").read_text(encoding="utf-8"))
+    assert invocation["state_db"] == str(configured_state_db)
+
+
+def _run_wrapper(args: list[str], env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    import platform
+    import shutil
+    cmd = ["scripts/hermes-gateway-wrapper"] + args
+    if platform.system() == "Windows":
+        bash_path = os.environ.get("HERMES_GIT_BASH_PATH") or shutil.which("bash") or "bash"
+        cmd = [bash_path, "scripts/hermes-gateway-wrapper"] + args
+    return subprocess.run(
+        cmd,
         cwd=Path.cwd(),
         env=env,
         capture_output=True,
         text=True,
         check=False,
     )
-
-    assert result.returncode == 0, result.stderr
-    invocation = json.loads((tmp_path / "adapter-invocation.json").read_text(encoding="utf-8"))
-    assert invocation["state_db"] == str(configured_state_db)
 
 
 def _wrapper_env(tmp_path: Path, fake_adapter: Path) -> dict[str, str]:
@@ -147,9 +139,7 @@ def _write_fake_gateway_adapter(tmp_path: Path) -> Path:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     adapter = bin_dir / "hermes-gateway-adapter"
-    adapter.write_text(
-        """#!/usr/bin/env python3
-from __future__ import annotations
+    content = f"#!{sys.executable}\n" + """from __future__ import annotations
 
 import json
 import os
@@ -207,8 +197,7 @@ print(
     file=sys.stderr,
 )
 raise SystemExit(2)
-""",
-        encoding="utf-8",
-    )
+"""
+    adapter.write_text(content, encoding="utf-8")
     adapter.chmod(0o755)
     return adapter
