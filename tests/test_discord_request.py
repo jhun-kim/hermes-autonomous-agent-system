@@ -108,13 +108,13 @@ def test_parse_discord_request_resolves_alias_in_natural_language() -> None:
 
 def test_parse_discord_request_uses_channel_default_for_friend_like_message() -> None:
     config = DiscordRequestRouterConfig(
-        channel_default_repos={"1512060115757432833": "jhun-kim/hermes-autonomous-agent-system"}
+        channel_default_repos={"123456789012345680": "jhun-kim/hermes-autonomous-agent-system"}
     )
 
     request = parse_discord_request(
         "Hermes, 이 레포에 자동 finalize 붙여줘",
         config=config,
-        thread_id="1512060115757432833",
+        thread_id="123456789012345680",
     )
 
     assert request.repo_raw == "jhun-kim/hermes-autonomous-agent-system"

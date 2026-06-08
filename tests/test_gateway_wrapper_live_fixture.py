@@ -14,7 +14,7 @@ def test_gateway_wrapper_live_mode_uses_config_allow_list_without_allow_any(tmp_
     event = json.dumps(
         {
             "platform": "discord",
-            "channel_id": "1512060115757432833",
+            "channel_id": "123456789012345680",
             "content": "Hermes, hasystem add live wrapper fixture",
             "dry_run": False,
         }
@@ -97,7 +97,7 @@ def test_gateway_wrapper_live_mode_passes_configured_state_db(tmp_path: Path) ->
     event = json.dumps(
         {
             "platform": "discord",
-            "channel_id": "1512060115757432833",
+            "channel_id": "123456789012345680",
             "content": "Hermes, hasystem add live wrapper fixture",
             "dry_run": False,
         }

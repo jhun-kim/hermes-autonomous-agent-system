@@ -7,16 +7,16 @@ Markdown harness engineering for a macOS cmux multi-agent workspace. The reposit
 The canonical thread workspace is documented in [`docs/THREAD_CMUX_WORKSPACE.md`](docs/THREAD_CMUX_WORKSPACE.md):
 
 ```text
-Guild ID: 1478650515888934932
-Parent Channel ID: 1478650642854580434
-Thread ID: 1512679333611700224
+Guild ID: 123456789012345678
+Parent Channel ID: 123456789012345679
+Thread ID: 123456789012345682
 ```
 
 The core promise is: **users operate multi-agent coding by editing Markdown and watching cmux surfaces, not by editing Python.** Start with [`docs/THREAD_CMUX_WORKSPACE.md`](docs/THREAD_CMUX_WORKSPACE.md), then run [`harnesses/issue-loop.md`](harnesses/issue-loop.md) and adjust the policies in [`policies/`](policies/) plus reusable prompts in [`templates/`](templates/).
 
 Markdown harness map:
 
-- [`docs/THREAD_CMUX_WORKSPACE.md`](docs/THREAD_CMUX_WORKSPACE.md) — central macOS cmux multi-agent workspace report for Discord thread `1512679333611700224`.
+- [`docs/THREAD_CMUX_WORKSPACE.md`](docs/THREAD_CMUX_WORKSPACE.md) — central macOS cmux multi-agent workspace report for Discord thread `123456789012345682`.
 - [`harnesses/issue-loop.md`](harnesses/issue-loop.md) — one bounded issue from selection through PR handoff and follow-up issue creation.
 - [`policies/issue-first.md`](policies/issue-first.md) — every repo-changing task starts with a confirmed GitHub issue.
 - [`policies/cmux-first.md`](policies/cmux-first.md) — one Discord thread maps to one cmux workspace with visible worker surfaces.
@@ -224,7 +224,7 @@ Use this checklist before pointing a production Hermes Discord gateway at
 
    ```bash
    export HASYSTEM_GATEWAY_ADAPTER_COMMAND="$HOME/.hermes/hasystem-gateway-runtime/hasystem-gateway-wrapper --live"
-   export HASYSTEM_GATEWAY_PARENT_CHANNEL_IDS="1478650642854580434"
+   export HASYSTEM_GATEWAY_PARENT_CHANNEL_IDS="123456789012345679"
    ```
 
    For a Discord thread message, the plugin builds the adapter envelope with
@@ -260,8 +260,8 @@ Minimum dry-run event:
 printf '%s\n' '{
   "platform": "discord",
   "guild_id": "123",
-  "channel_id": "1512060115757432833",
-  "thread_id": "1512060115757432833",
+  "channel_id": "123456789012345680",
+  "thread_id": "123456789012345680",
   "sender": {"id": "42", "display_name": "Chai"},
   "content": "Hermes, hasystem integrate the gateway adapter",
   "dry_run": true
@@ -283,7 +283,7 @@ Router config can live in JSON:
     "hasystem": "jhun-kim/hermes-autonomous-agent-system"
   },
   "channel_default_repos": {
-    "1512060115757432833": "jhun-kim/hermes-autonomous-agent-system"
+    "123456789012345680": "jhun-kim/hermes-autonomous-agent-system"
   },
   "allow_repos": ["jhun-kim/hermes-autonomous-agent-system"],
   "default_repo": "jhun-kim/hermes-autonomous-agent-system"
@@ -295,7 +295,7 @@ Use it like this:
 ```bash
 PYTHONPATH=src python3 -m hasystem.commands.gateway_adapter \
   --config hermes-router.json \
-  --event-json '{"platform":"discord","channel_id":"1512060115757432833","content":"Hermes, 다음 단계 진행해줘","dry_run":true}'
+  --event-json '{"platform":"discord","channel_id":"123456789012345680","content":"Hermes, 다음 단계 진행해줘","dry_run":true}'
 ```
 
 #### GODMODE safe gateway configuration and issue #33 smoke
@@ -304,13 +304,13 @@ GODMODE is fail-closed. A `godmode`, `godmode status`, `godmode pause`,
 `godmode resume`, or `godmode stop` command is accepted only when the Discord
 thread/channel or sender appears in the router config `godmode` authorization
 lists. The tracked `examples/hermes-router.json` keeps the originating issue #33
-thread, `1512332564218773564`, authorized for smoke testing while using safe
+thread, `123456789012345681`, authorized for smoke testing while using safe
 runtime guardrails:
 
 ```json
 {
   "godmode": {
-    "authorized_channel_ids": ["1512332564218773564"],
+    "authorized_channel_ids": ["123456789012345681"],
     "authorized_sender_ids": ["REPLACE_WITH_TRUSTED_DISCORD_USER_ID"],
     "max_iterations": 0,
     "max_runtime_seconds": 60,
@@ -389,7 +389,7 @@ and allow-list entries:
 PYTHONPATH=src python3 -m hasystem.commands.gateway_adapter \
   --config hermes-router.json \
   --repo-alias hasystem=jhun-kim/hermes-autonomous-agent-system \
-  --channel-default-repo 1512060115757432833=jhun-kim/hermes-autonomous-agent-system \
+  --channel-default-repo 123456789012345680=jhun-kim/hermes-autonomous-agent-system \
   --allow-repo jhun-kim/hermes-autonomous-agent-system \
   --dry-run \
   --event-json '{"platform":"discord","content":"Hermes, hasystem run the next task"}'
@@ -440,8 +440,8 @@ If a Discord channel/thread is dedicated to one repo, configure a default and om
 
 ```bash
 PYTHONPATH=src python3 -m hasystem.commands.discord_request \
-  --channel-default-repo 1512060115757432833=jhun-kim/hermes-autonomous-agent-system \
-  --thread-id 1512060115757432833 \
+  --channel-default-repo 123456789012345680=jhun-kim/hermes-autonomous-agent-system \
+  --thread-id 123456789012345680 \
   --message 'Hermes, 이 레포에 자동 finalize 붙여줘' \
   --dry-run
 ```

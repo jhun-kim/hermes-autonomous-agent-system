@@ -45,9 +45,9 @@ REQUIRED_SECTIONS = {
 REQUIRED_TERMS = {
     "harnesses/issue-loop.md": ["GitHub issue", "cmux", "Codex", "follow-up issue", "Windows", "terminal fallback", "twenty additive terminal surfaces"],
     "policies/issue-first.md": ["GitHub issue", "source of truth"],
-    "policies/cmux-first.md": ["Discord thread", "cmux workspace", "visible", "macOS", "Windows", "Codex CLI", "1512679333611700224"],
+    "policies/cmux-first.md": ["Discord thread", "cmux workspace", "visible", "macOS", "Windows", "Codex CLI", "123456789012345682"],
     "examples/cmux-20-surface-workspace.md": ["Surface 01", "Surface 20", "follow-up issue creator"],
-    "docs/THREAD_CMUX_WORKSPACE.md": ["1478650515888934932", "1478650642854580434", "1512679333611700224", "hasystem-thread-1512679333611700224", "twenty additive terminal surfaces", "| 20 | Follow-up issue creator |", "cmux new-workspace", "cmux new-surface", "codex exec"],
+    "docs/THREAD_CMUX_WORKSPACE.md": ["123456789012345678", "123456789012345679", "123456789012345682", "hasystem-thread-123456789012345682", "twenty additive terminal surfaces", "| 20 | Follow-up issue creator |", "cmux new-workspace", "cmux new-surface", "codex exec"],
     "docs/PLATFORM_SETUP.md": ["cmux is missing", "cmux version", "Windows Terminal", "codex --version"],
 }
 

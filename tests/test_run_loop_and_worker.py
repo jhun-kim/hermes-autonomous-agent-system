@@ -102,7 +102,7 @@ def test_cmux_launcher_targets_discord_thread_workspace_and_adds_surface(tmp_pat
         guild_id="guild-1",
         channel_id="channel-1",
         channel_name="agent messages",
-        thread_id="1512332564218773564",
+        thread_id="123456789012345681",
         thread_name="Hermes continuation after 2 compactions",
     )
 
@@ -114,7 +114,7 @@ def test_cmux_launcher_targets_discord_thread_workspace_and_adds_surface(tmp_pat
     script = cmux_command.args[-1]
     assert "workspace list" in script
     assert "discord: Hermes continuation after 2 compactions" in script
-    assert "1512332564218773564"[-24:] in script
+    assert "123456789012345681"[-24:] in script
     assert "owner/repo" in script
     assert "new-workspace --name" in script
     assert "new-surface --workspace \"$workspace_id\" --type terminal --focus false" in script
