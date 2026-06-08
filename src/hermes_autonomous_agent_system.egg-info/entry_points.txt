@@ -1,0 +1,8 @@
+[console_scripts]
+hasystem-install-ko = hasystem.commands.install_ko:main
+hermes-discord-request = hasystem.commands.discord_request:main
+hermes-finalize = hasystem.commands.finalize:main
+hermes-gateway-adapter = hasystem.commands.gateway_adapter:main
+hermes-intake = hasystem.commands.intake:main
+hermes-run-loop = hasystem.commands.run_loop:main
+hermes-run-once = hasystem.commands.run_once:main
