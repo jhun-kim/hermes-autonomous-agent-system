@@ -19,84 +19,88 @@ class StateStore:
         return conn
 
     def _init_db(self) -> None:
-        with self._connect() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS loops (
-                    loop_id TEXT PRIMARY KEY,
-                    repo TEXT NOT NULL,
-                    issue_number INTEGER NOT NULL,
-                    issue_title TEXT NOT NULL,
-                    issue_body TEXT NOT NULL DEFAULT '',
-                    issue_labels TEXT NOT NULL,
-                    branch TEXT NOT NULL,
-                    executor TEXT NOT NULL,
-                    phase TEXT NOT NULL,
-                    approval_intent TEXT,
-                    approval_status TEXT,
-                    approval_id TEXT,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
+        conn = self._connect()
+        try:
+            with conn:
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS loops (
+                        loop_id TEXT PRIMARY KEY,
+                        repo TEXT NOT NULL,
+                        issue_number INTEGER NOT NULL,
+                        issue_title TEXT NOT NULL,
+                        issue_body TEXT NOT NULL DEFAULT '',
+                        issue_labels TEXT NOT NULL,
+                        branch TEXT NOT NULL,
+                        executor TEXT NOT NULL,
+                        phase TEXT NOT NULL,
+                        approval_intent TEXT,
+                        approval_status TEXT,
+                        approval_id TEXT,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    )
+                    """
                 )
-                """
-            )
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_loops_repo_phase ON loops(repo, phase)")
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS godmode_sessions (
-                    conversation_id TEXT PRIMARY KEY,
-                    repo TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    iterations INTEGER NOT NULL,
-                    failures INTEGER NOT NULL,
-                    last_issue_number INTEGER,
-                    last_issue_title TEXT,
-                    stop_reason TEXT,
-                    evidence TEXT NOT NULL DEFAULT '[]',
-                    started_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_loops_repo_phase ON loops(repo, phase)")
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS godmode_sessions (
+                        conversation_id TEXT PRIMARY KEY,
+                        repo TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        iterations INTEGER NOT NULL,
+                        failures INTEGER NOT NULL,
+                        last_issue_number INTEGER,
+                        last_issue_title TEXT,
+                        stop_reason TEXT,
+                        evidence TEXT NOT NULL DEFAULT '[]',
+                        started_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    )
+                    """
                 )
-                """
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS gateway_conversations (
-                    conversation_id TEXT PRIMARY KEY,
-                    platform TEXT NOT NULL,
-                    guild_id TEXT,
-                    channel_id TEXT,
-                    thread_id TEXT,
-                    repo TEXT,
-                    latest_user_goal TEXT,
-                    latest_summary TEXT,
-                    active_issue_number INTEGER,
-                    active_issue_title TEXT,
-                    active_issue_labels TEXT NOT NULL DEFAULT '[]',
-                    compaction_count INTEGER NOT NULL DEFAULT 0,
-                    continuation_of TEXT,
-                    continuation_conversation_id TEXT,
-                    continuation_thread_id TEXT,
-                    original_conversation_name TEXT,
-                    continuation_sequence INTEGER NOT NULL DEFAULT 1,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS gateway_conversations (
+                        conversation_id TEXT PRIMARY KEY,
+                        platform TEXT NOT NULL,
+                        guild_id TEXT,
+                        channel_id TEXT,
+                        thread_id TEXT,
+                        repo TEXT,
+                        latest_user_goal TEXT,
+                        latest_summary TEXT,
+                        active_issue_number INTEGER,
+                        active_issue_title TEXT,
+                        active_issue_labels TEXT NOT NULL DEFAULT '[]',
+                        compaction_count INTEGER NOT NULL DEFAULT 0,
+                        continuation_of TEXT,
+                        continuation_conversation_id TEXT,
+                        continuation_thread_id TEXT,
+                        original_conversation_name TEXT,
+                        continuation_sequence INTEGER NOT NULL DEFAULT 1,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    )
+                    """
                 )
-                """
-            )
-            self._ensure_gateway_conversation_column(
-                conn,
-                name="original_conversation_name",
-                definition="TEXT",
-            )
-            self._ensure_gateway_conversation_column(
-                conn,
-                name="continuation_sequence",
-                definition="INTEGER NOT NULL DEFAULT 1",
-            )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_gateway_conversations_platform_updated "
-                "ON gateway_conversations(platform, updated_at)"
-            )
+                self._ensure_gateway_conversation_column(
+                    conn,
+                    name="original_conversation_name",
+                    definition="TEXT",
+                )
+                self._ensure_gateway_conversation_column(
+                    conn,
+                    name="continuation_sequence",
+                    definition="INTEGER NOT NULL DEFAULT 1",
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_gateway_conversations_platform_updated "
+                    "ON gateway_conversations(platform, updated_at)"
+                )
+        finally:
+            conn.close()
 
     @staticmethod
     def _ensure_gateway_conversation_column(conn: sqlite3.Connection, *, name: str, definition: str) -> None:
@@ -108,95 +112,112 @@ class StateStore:
 
     def save_loop(self, loop: LoopState) -> None:
         updated_at = utc_now_iso()
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO loops (
-                    loop_id, repo, issue_number, issue_title, issue_body, issue_labels,
-                    branch, executor, phase, approval_intent, approval_status, approval_id,
-                    created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(loop_id) DO UPDATE SET
-                    repo=excluded.repo,
-                    issue_number=excluded.issue_number,
-                    issue_title=excluded.issue_title,
-                    issue_body=excluded.issue_body,
-                    issue_labels=excluded.issue_labels,
-                    branch=excluded.branch,
-                    executor=excluded.executor,
-                    phase=excluded.phase,
-                    approval_intent=excluded.approval_intent,
-                    approval_status=excluded.approval_status,
-                    approval_id=excluded.approval_id,
-                    updated_at=excluded.updated_at
-                """,
-                (
-                    loop.loop_id,
-                    loop.repo,
-                    loop.issue.number,
-                    loop.issue.title,
-                    loop.issue.body,
-                    json.dumps(loop.issue.labels),
-                    loop.branch,
-                    loop.executor,
-                    loop.phase,
-                    loop.approval.intent,
-                    loop.approval.status,
-                    loop.approval.approval_id,
-                    loop.created_at,
-                    updated_at,
-                ),
-            )
+        conn = self._connect()
+        try:
+            with conn:
+                conn.execute(
+                    """
+                    INSERT INTO loops (
+                        loop_id, repo, issue_number, issue_title, issue_body, issue_labels,
+                        branch, executor, phase, approval_intent, approval_status, approval_id,
+                        created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(loop_id) DO UPDATE SET
+                        repo=excluded.repo,
+                        issue_number=excluded.issue_number,
+                        issue_title=excluded.issue_title,
+                        issue_body=excluded.issue_body,
+                        issue_labels=excluded.issue_labels,
+                        branch=excluded.branch,
+                        executor=excluded.executor,
+                        phase=excluded.phase,
+                        approval_intent=excluded.approval_intent,
+                        approval_status=excluded.approval_status,
+                        approval_id=excluded.approval_id,
+                        updated_at=excluded.updated_at
+                    """,
+                    (
+                        loop.loop_id,
+                        loop.repo,
+                        loop.issue.number,
+                        loop.issue.title,
+                        loop.issue.body,
+                        json.dumps(loop.issue.labels),
+                        loop.branch,
+                        loop.executor,
+                        loop.phase,
+                        loop.approval.intent,
+                        loop.approval.status,
+                        loop.approval.approval_id,
+                        loop.created_at,
+                        updated_at,
+                    ),
+                )
+        finally:
+            conn.close()
 
     def get_loop(self, loop_id: str) -> LoopState | None:
-        with self._connect() as conn:
+        conn = self._connect()
+        try:
             row = conn.execute("SELECT * FROM loops WHERE loop_id = ?", (loop_id,)).fetchone()
+        finally:
+            conn.close()
         return self._row_to_loop(row) if row else None
 
     def get_active_loop(self, repo: str) -> LoopState | None:
         placeholders = ",".join("?" for _ in ACTIVE_PHASES)
         query = f"SELECT * FROM loops WHERE repo = ? AND phase IN ({placeholders}) ORDER BY updated_at DESC LIMIT 1"
-        with self._connect() as conn:
+        conn = self._connect()
+        try:
             row = conn.execute(query, (repo, *ACTIVE_PHASES)).fetchone()
+        finally:
+            conn.close()
         return self._row_to_loop(row) if row else None
 
     def save_godmode_session(self, session: GodmodeSession) -> None:
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO godmode_sessions (
-                    conversation_id, repo, status, iterations, failures, last_issue_number,
-                    last_issue_title, stop_reason, evidence, started_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(conversation_id) DO UPDATE SET
-                    repo=excluded.repo,
-                    status=excluded.status,
-                    iterations=excluded.iterations,
-                    failures=excluded.failures,
-                    last_issue_number=excluded.last_issue_number,
-                    last_issue_title=excluded.last_issue_title,
-                    stop_reason=excluded.stop_reason,
-                    evidence=excluded.evidence,
-                    updated_at=excluded.updated_at
-                """,
-                (
-                    session.conversation_id,
-                    session.repo,
-                    session.status,
-                    session.iterations,
-                    session.failures,
-                    session.last_issue_number,
-                    session.last_issue_title,
-                    session.stop_reason,
-                    json.dumps(session.evidence),
-                    session.started_at,
-                    session.updated_at,
-                ),
-            )
+        conn = self._connect()
+        try:
+            with conn:
+                conn.execute(
+                    """
+                    INSERT INTO godmode_sessions (
+                        conversation_id, repo, status, iterations, failures, last_issue_number,
+                        last_issue_title, stop_reason, evidence, started_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(conversation_id) DO UPDATE SET
+                        repo=excluded.repo,
+                        status=excluded.status,
+                        iterations=excluded.iterations,
+                        failures=excluded.failures,
+                        last_issue_number=excluded.last_issue_number,
+                        last_issue_title=excluded.last_issue_title,
+                        stop_reason=excluded.stop_reason,
+                        evidence=excluded.evidence,
+                        updated_at=excluded.updated_at
+                    """,
+                    (
+                        session.conversation_id,
+                        session.repo,
+                        session.status,
+                        session.iterations,
+                        session.failures,
+                        session.last_issue_number,
+                        session.last_issue_title,
+                        session.stop_reason,
+                        json.dumps(session.evidence),
+                        session.started_at,
+                        session.updated_at,
+                    ),
+                )
+        finally:
+            conn.close()
 
     def get_godmode_session(self, conversation_id: str) -> GodmodeSession | None:
-        with self._connect() as conn:
+        conn = self._connect()
+        try:
             row = conn.execute("SELECT * FROM godmode_sessions WHERE conversation_id = ?", (conversation_id,)).fetchone()
+        finally:
+            conn.close()
         return self._row_to_godmode_session(row) if row else None
 
     def increment_gateway_compaction(
@@ -217,61 +238,68 @@ class StateStore:
     ) -> GatewayConversationState:
         updated_at = utc_now_iso()
         labels = active_issue_labels or []
-        with self._connect() as conn:
-            existing = conn.execute(
-                "SELECT * FROM gateway_conversations WHERE conversation_id = ?",
-                (conversation_id,),
-            ).fetchone()
-            if existing is None:
-                state = GatewayConversationState(
-                    conversation_id=conversation_id,
-                    platform=platform,
-                    guild_id=guild_id,
-                    channel_id=channel_id,
-                    thread_id=thread_id,
-                    repo=repo,
-                    latest_user_goal=latest_user_goal,
-                    latest_summary=latest_summary,
-                    active_issue_number=active_issue_number,
-                    active_issue_title=active_issue_title,
-                    active_issue_labels=labels,
-                    compaction_count=1,
-                    original_conversation_name=conversation_name,
-                    created_at=updated_at,
-                    updated_at=updated_at,
-                )
-            else:
-                previous = self._row_to_gateway_conversation(existing)
-                state = GatewayConversationState(
-                    conversation_id=previous.conversation_id,
-                    platform=platform,
-                    guild_id=guild_id or previous.guild_id,
-                    channel_id=channel_id or previous.channel_id,
-                    thread_id=thread_id or previous.thread_id,
-                    repo=repo or previous.repo,
-                    latest_user_goal=latest_user_goal or previous.latest_user_goal,
-                    latest_summary=latest_summary or previous.latest_summary,
-                    active_issue_number=active_issue_number or previous.active_issue_number,
-                    active_issue_title=active_issue_title or previous.active_issue_title,
-                    active_issue_labels=labels or previous.active_issue_labels,
-                    compaction_count=previous.compaction_count + 1,
-                    continuation_of=previous.continuation_of,
-                    continuation_conversation_id=previous.continuation_conversation_id,
-                    continuation_thread_id=previous.continuation_thread_id,
-                    original_conversation_name=previous.original_conversation_name or conversation_name,
-                    continuation_sequence=previous.continuation_sequence,
-                    created_at=previous.created_at,
-                    updated_at=updated_at,
-                )
-            self._save_gateway_conversation(conn, state)
+        conn = self._connect()
+        try:
+            with conn:
+                existing = conn.execute(
+                    "SELECT * FROM gateway_conversations WHERE conversation_id = ?",
+                    (conversation_id,),
+                ).fetchone()
+                if existing is None:
+                    state = GatewayConversationState(
+                        conversation_id=conversation_id,
+                        platform=platform,
+                        guild_id=guild_id,
+                        channel_id=channel_id,
+                        thread_id=thread_id,
+                        repo=repo,
+                        latest_user_goal=latest_user_goal,
+                        latest_summary=latest_summary,
+                        active_issue_number=active_issue_number,
+                        active_issue_title=active_issue_title,
+                        active_issue_labels=labels,
+                        compaction_count=1,
+                        original_conversation_name=conversation_name,
+                        created_at=updated_at,
+                        updated_at=updated_at,
+                    )
+                else:
+                    previous = self._row_to_gateway_conversation(existing)
+                    state = GatewayConversationState(
+                        conversation_id=previous.conversation_id,
+                        platform=platform,
+                        guild_id=guild_id or previous.guild_id,
+                        channel_id=channel_id or previous.channel_id,
+                        thread_id=thread_id or previous.thread_id,
+                        repo=repo or previous.repo,
+                        latest_user_goal=latest_user_goal or previous.latest_user_goal,
+                        latest_summary=latest_summary or previous.latest_summary,
+                        active_issue_number=active_issue_number or previous.active_issue_number,
+                        active_issue_title=active_issue_title or previous.active_issue_title,
+                        active_issue_labels=labels or previous.active_issue_labels,
+                        compaction_count=previous.compaction_count + 1,
+                        continuation_of=previous.continuation_of,
+                        continuation_conversation_id=previous.continuation_conversation_id,
+                        continuation_thread_id=previous.continuation_thread_id,
+                        original_conversation_name=previous.original_conversation_name or conversation_name,
+                        continuation_sequence=previous.continuation_sequence,
+                        created_at=previous.created_at,
+                        updated_at=updated_at,
+                    )
+                self._save_gateway_conversation(conn, state)
+        finally:
+            conn.close()
         return state
 
     def get_gateway_conversation(self, conversation_id: str) -> GatewayConversationState | None:
-        with self._connect() as conn:
+        conn = self._connect()
+        try:
             row = conn.execute(
                 "SELECT * FROM gateway_conversations WHERE conversation_id = ?",
                 (conversation_id,),
             ).fetchone()
+        finally:
+            conn.close()
         return self._row_to_gateway_conversation(row) if row else None
 
     def create_gateway_continuation(
@@ -282,18 +310,22 @@ class StateStore:
         continuation_thread_id: str | None = None,
     ) -> None:
         updated_at = utc_now_iso()
-        with self._connect() as conn:
-            self._save_gateway_conversation(conn, new_state)
-            conn.execute(
-                """
-                UPDATE gateway_conversations
-                SET continuation_conversation_id = ?,
-                    continuation_thread_id = ?,
-                    updated_at = ?
-                WHERE conversation_id = ?
-                """,
-                (new_state.conversation_id, continuation_thread_id, updated_at, old_conversation_id),
-            )
+        conn = self._connect()
+        try:
+            with conn:
+                self._save_gateway_conversation(conn, new_state)
+                conn.execute(
+                    """
+                    UPDATE gateway_conversations
+                    SET continuation_conversation_id = ?,
+                        continuation_thread_id = ?,
+                        updated_at = ?
+                    WHERE conversation_id = ?
+                    """,
+                    (new_state.conversation_id, continuation_thread_id, updated_at, old_conversation_id),
+                )
+        finally:
+            conn.close()
 
     @staticmethod
     def _row_to_godmode_session(row: sqlite3.Row) -> GodmodeSession:
